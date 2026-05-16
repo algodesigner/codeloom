@@ -9,8 +9,8 @@
 
 <p align="center">
   <a href="https://github.com/algodesigner/codeloom/actions"><img src="https://img.shields.io/github/actions/workflow/status/algodesigner/codeloom/ci.yml?branch=main" alt="CI"></a>
-  <a href="https://pypi.org/project/codeloom/"><img src="https://img.shields.io/pypi/v/codeloom" alt="PyPI"></a>
-  <a href="https://github.com/algodesigner/codeloom/blob/main/LICENSE"><img src="https://img.shields.io/github/license/algodesigner/codeloom" alt="License"></a>
+  <a href="https://pypi.org/project/codeloom/"><img src="https://img.shields.io/pypi/v/codeloom?cache_bust=2" alt="PyPI"></a>
+  <a href="https://github.com/algodesigner/codeloom/blob/main/LICENSE"><img src="https://img.shields.io/github/license/algodesigner/codeloom?cache_bust=2" alt="License"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
 </p>
 
