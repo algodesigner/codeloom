@@ -1,0 +1,93 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codeloom"
+version = "0.1.0"
+description = "Local-first code graph builder with 5-signal hybrid search for AI coding agents"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Vlad" }]
+keywords = ["code-graph", "vector-search", "graphrag", "code-analysis", "knowledge-graph"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing :: Indexing",
+    "Typing :: Typed",
+]
+
+readme = "README.md"
+
+dependencies = [
+    "click>=8.1",
+    "rich>=13.0",
+    "networkx>=3.2",
+    "tree-sitter>=0.24",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-go>=0.23",
+    "tree-sitter-rust>=0.23",
+    "tree-sitter-java>=0.23",
+    "tree-sitter-c>=0.23",
+    "tree-sitter-cpp>=0.23",
+    "tree-sitter-c-sharp>=0.23",
+    "tree-sitter-ruby>=0.23",
+    "tree-sitter-scala>=0.23",
+    "tree-sitter-lua>=0.5",
+    "tree-sitter-php>=0.23",
+    "tree-sitter-elixir>=0.3",
+    "tree-sitter-kotlin>=1.0",
+    "tree-sitter-objc>=3.0",
+    "tree-sitter-swift>=0.0.1",
+    "sentence-transformers>=3.0",
+    "faiss-cpu>=1.7.4",
+    "leidenalg>=0.10",
+    "igraph>=0.11",
+    "numpy>=1.26",
+    "pathspec>=0.12",
+    "pyyaml>=6.0",
+    "python-hcl2>=4.3",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/algodesigner/codeloom"
+Repository = "https://github.com/algodesigner/codeloom"
+Issues = "https://github.com/algodesigner/codeloom/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0"]
+docs = ["pymupdf>=1.24"]
+mcp = ["mcp>=1.0"]
+
+[project.scripts]
+codeloom = "codeloom.cli.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["codeloom"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=codeloom --cov-report=term-missing"

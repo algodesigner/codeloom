@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# hedwig-cg databases (generated)
+.hedwig-cg/
+.hedwig-cb/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+
+# Internal review feedback (not for public repo)
+feedbacks/
+
+# Generated integration files (from hedwig-cg install commands)
+.cursor/
+.windsurf/
+.codex/
+AGENTS.md
+GEMINI.md
+CONVENTIONS.md
+.aider.conf.yml
+
+# OMC state
+.omc/
+
+# Research references
+docs/references/
