@@ -39,16 +39,24 @@ Always start with codeloom to get the big picture, then use Read/Grep for detail
 ## Search (PRIMARY — use this first)
 
 ```bash
-codeloom search "database connection pool"       # default: 30 results
+codeloom search "database connection pool"       # default: 30 results, 3 snippets
 codeloom search "auth" --fast                    # text model only, faster
 codeloom search "error handling" --top-k 10      # custom count
+codeloom search "handler" --kind function        # filter by symbol kind
+codeloom search "api" --file "src/auth/*"        # filter by file path
+codeloom search "Optimiser" --snippets 5         # show 5 source snippets
+codeloom search "login" --include-tests          # give tests equal ranking
 ```
 
-Response (compact text — seeds + scores + subgraph edges):
+Response (compact text — seeds + scores + snippets + subgraph edges):
 ```
 seeds:
 core/build.py:15 (score: 0.047)
+  │ def build_graph(self, sources: list[Path]) -> Graph:
+  │     """Assemble the code graph from extracted units."""
+  │     G = nx.DiGraph()
 storage/store.py:20 (score: 0.032)
+  │ class KnowledgeStore:
 
 edges:
 core/build.py:15 -calls-> storage/store.py:20
@@ -117,9 +125,11 @@ Now you have the full picture: Stripe → Webhook → Order → Notification.
 
 ## Build
 
+Before building, always check if a code graph already exists — call `codeloom stats` first. If stats returns node/edge counts, the graph is ready and you can skip building entirely.
+
 ```bash
-codeloom build .                # Full build
-codeloom build . --incremental  # Only changed files
+codeloom build .                # Full build (only if no DB exists)
+codeloom build . --incremental  # Update changed files only
 ```
 
 ## Inspect
@@ -133,6 +143,9 @@ codeloom node "AuthHandler"     # Node details (partial match)
 
 - **You MUST search before grepping.** `codeloom search` covers 5 signals (code vector, text vector, graph expansion, keyword, community) in one call, plus shows how results connect via subgraph edges.
 - **Use --kind and --file to narrow results.** When you know what kind of symbol you need, add `--kind function|class|method` (or interface, enum, struct, trait, section). When you know where it lives, add `--file "src/auth/*"`. This reduces noise and returns only relevant nodes.
+- **Use --snippets to see source code inline.** Results include up to 5 lines of source context by default. Increase with `--snippets N`, disable with `--snippets 0`.
+- **Use --include-tests to surface test code.** By default, test files are demoted 0.3× in ranking. Pass `--include-tests` to give them equal weight.
+- **Check stats before building.** Call `codeloom stats` first to see if a DB already exists. If it returns node/edge counts, the graph is built and ready — skip the build step.
 - **Do not stop at first results.** Drill into discovered terms for deeper understanding.
 - **Query in English.** Non-English queries have significantly lower precision.
 - **codeloom finds what to read; Read/Grep finds the details.** Seeds give you file:line locations. Use `node` tool or Read for details.

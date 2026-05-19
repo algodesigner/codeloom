@@ -49,23 +49,45 @@ _graph = None
 _db_path: str | None = None
 
 
-def _get_db_path() -> str:
-    """Resolve the code graph database path."""
+def _get_db_path(source_dir: str | None = None) -> str:
+    """Resolve the code graph database path.
+
+    Priority:
+    1. CODELOOM_DB environment variable
+    2. Walk up from cwd looking for .codeloom/knowledge.db
+    3. Walk up from source_dir (if provided) as fallback
+    4. Default to cwd/.codeloom/knowledge.db
+    """
     global _db_path
     if _db_path:
         return _db_path
-    # Check environment variable first, then fall back to cwd
+    # Check environment variable first
     env_path = os.environ.get("CODELOOM_DB")
     if env_path and Path(env_path).exists():
         _db_path = env_path
         return _db_path
-    # Walk up from cwd looking for .codeloom/knowledge.db
+
+    def _walk_from(start: Path) -> str | None:
+        for parent in [start, *start.parents]:
+            candidate = parent / ".codeloom" / "knowledge.db"
+            if candidate.exists():
+                return str(candidate)
+        return None
+
+    # Walk up from cwd
     cwd = Path.cwd()
-    for parent in [cwd, *cwd.parents]:
-        candidate = parent / ".codeloom" / "knowledge.db"
-        if candidate.exists():
-            _db_path = str(candidate)
+    found = _walk_from(cwd)
+    if found:
+        _db_path = found
+        return _db_path
+
+    # Walk up from source_dir as fallback
+    if source_dir:
+        found = _walk_from(Path(source_dir).resolve())
+        if found:
+            _db_path = found
             return _db_path
+
     # Default to cwd
     _db_path = str(cwd / ".codeloom" / "knowledge.db")
     return _db_path
@@ -80,9 +102,12 @@ def _load():
 
     db = _get_db_path()
     if not Path(db).exists():
+        cwd_parents = "/, ".join(p.name for p in [Path.cwd(), *Path.cwd().parents][:4])
         raise FileNotFoundError(
             f"Code graph not found at {db}. "
-            "Run 'codeloom build <dir>' first."
+            f"Run 'codeloom build <dir>' first. "
+            f"Searched from cwd ({Path.cwd()}) and parents. "
+            f"Tip: set CODELOOM_DB env var to point to your knowledge.db."
         )
     _store = KnowledgeStore(db)
     _graph = _store.load_graph()
@@ -322,10 +347,36 @@ def build(directory: str = ".", incremental: bool = True) -> str:
         incremental: If true, only re-process changed files (default: true).
     """
     from codeloom.core.pipeline import run_pipeline
+    from codeloom.storage.store import KnowledgeStore
 
     target = Path(directory).resolve()
     if not target.is_dir():
         return f"Error: '{directory}' is not a valid directory."
+
+    # Check if a database already exists at this target or above
+    existing_db = _get_db_path(source_dir=str(target))
+    db_path = Path(existing_db)
+    if db_path.exists():
+        try:
+            existing_store = KnowledgeStore(str(db_path))
+            G = existing_store.load_graph()
+            n_nodes = G.number_of_nodes()
+            n_edges = G.number_of_edges()
+            existing_store.close()
+            if n_nodes > 0:
+                if not incremental:
+                    return (
+                        f"## Database Already Exists\n\n"
+                        f"- **Location**: {existing_db}\n"
+                        f"- **Nodes**: {n_nodes}\n"
+                        f"- **Edges**: {n_edges}\n"
+                        f"- **Source**: {target}\n\n"
+                        f"Use `build . --incremental` to update, or set "
+                        f"`incremental=true` (the default)."
+                    )
+                # incremental=True + DB exists → run incremental build (fast)
+        except Exception:
+            pass  # DB exists but is corrupt or unreadable — rebuild
 
     result = run_pipeline(str(target), incremental=incremental)
 
@@ -337,13 +388,12 @@ def build(directory: str = ".", incremental: bool = True) -> str:
     )
     files = len(result.detect_result.files) if getattr(result, "detect_result", None) else 0
 
-    # Free large in-memory objects after DB persistence
     if hasattr(result, "release_memory"):
         result.release_memory()
 
-    # Force reload after build
     _reload()
 
+    db_info = _get_db_path(source_dir=str(target))
     return (
         f"## Build Complete\n\n"
         f"- **Directory**: {target}\n"
@@ -351,7 +401,7 @@ def build(directory: str = ".", incremental: bool = True) -> str:
         f"- **Nodes**: {nodes}\n"
         f"- **Edges**: {edges}\n"
         f"- **Files detected**: {files}\n"
-        f"- **Database**: {_get_db_path()}\n"
+        f"- **Database**: {db_info}\n"
     )
 
 

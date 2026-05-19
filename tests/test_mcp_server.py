@@ -471,3 +471,108 @@ class TestHelpers:
         with patch("codeloom.mcp_server._load", return_value=("new_store", "new_graph")) as mock_l:
             mod._reload()
             assert mod._store is None or mock_l.called
+
+    def test_get_db_path_source_dir_fallback(self, tmp_path):
+        import codeloom.mcp_server as mod
+
+        mod._db_path = None
+        # Create DB in a subdir, not under cwd
+        source = tmp_path / "project"
+        (source / ".codeloom").mkdir(parents=True)
+        (source / ".codeloom" / "knowledge.db").touch()
+        # CWD has no DB
+        cwd_no_db = tmp_path / "somewhere_else"
+        cwd_no_db.mkdir()
+        with patch("codeloom.mcp_server.Path.cwd", return_value=cwd_no_db), \
+             patch.dict("os.environ", {}, clear=True):
+            # Without source_dir, falls back to cwd default
+            mod._db_path = None
+            result = mod._get_db_path()
+            assert str(cwd_no_db) in result  # default fallback
+
+            # With source_dir, finds DB in source tree
+            mod._db_path = None
+            result = mod._get_db_path(source_dir=str(source))
+            assert "knowledge.db" in result
+        mod._db_path = None
+
+    def test_load_file_not_found_mentions_codeloom_db_env(self):
+        import codeloom.mcp_server as mod
+
+        mod._store = None
+        mod._graph = None
+        mod._db_path = None
+        with patch("codeloom.mcp_server._get_db_path", return_value="/fake/path/knowledge.db"):
+            with pytest.raises(FileNotFoundError, match="CODELOOM_DB"):
+                mod._load()
+
+    def test_build_existing_db_incremental_runs_pipeline(self, tmp_path):
+        import codeloom.mcp_server as mod
+
+        src = tmp_path / "proj"
+        src.mkdir()
+        (src / "hello.py").write_text("def hello(): pass\n")
+        (src / ".codeloom").mkdir()
+        (src / ".codeloom" / "knowledge.db").touch()
+
+        mock_graph = _make_graph()
+        mock_result = SimpleNamespace(
+            graph=mock_graph,
+            detected_files=["hello.py"],
+        )
+        mock_existing = MagicMock()
+        mock_existing.load_graph.return_value = mock_graph
+        mock_existing.close = MagicMock()
+        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result) as mock_pipe, \
+             patch("codeloom.mcp_server._reload"), \
+             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+            result = mod.build(str(src))
+            mock_pipe.assert_called_once()
+            assert "Build Complete" in result
+        mod._db_path = None
+
+    def test_build_existing_db_non_incremental_skips(self, tmp_path):
+        import codeloom.mcp_server as mod
+
+        src = tmp_path / "proj"
+        src.mkdir()
+        (src / "hello.py").write_text("def hello(): pass\n")
+        (src / ".codeloom").mkdir()
+        (src / ".codeloom" / "knowledge.db").touch()
+
+        mock_graph = _make_graph()
+        mock_existing = MagicMock()
+        mock_existing.load_graph.return_value = mock_graph
+        mock_existing.close = MagicMock()
+        with patch("codeloom.core.pipeline.run_pipeline") as mock_pipe, \
+             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+            result = mod.build(str(src), incremental=False)
+            mock_pipe.assert_not_called()
+            assert "Database Already Exists" in result
+            assert "3" in result  # node count
+        mod._db_path = None
+
+    def test_build_existing_db_corrupt_falls_through_to_rebuild(self, tmp_path):
+        import codeloom.mcp_server as mod
+
+        src = tmp_path / "proj"
+        src.mkdir()
+        (src / "hello.py").write_text("def hello(): pass\n")
+        (src / ".codeloom").mkdir()
+        (src / ".codeloom" / "knowledge.db").touch()
+
+        mock_graph = _make_graph()
+        mock_result = SimpleNamespace(
+            graph=mock_graph,
+            detected_files=["hello.py"],
+        )
+        mock_existing = MagicMock()
+        mock_existing.load_graph.side_effect = Exception("corrupt database")
+        mock_existing.close = MagicMock()
+        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result) as mock_pipe, \
+             patch("codeloom.mcp_server._reload"), \
+             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+            result = mod.build(str(src))
+            mock_pipe.assert_called_once()
+            assert "Build Complete" in result
+        mod._db_path = None

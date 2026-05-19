@@ -123,18 +123,25 @@ Results are fused via Weighted Reciprocal Rank Fusion (RRF), then connected thro
 
 **Smart Test Demotion:** By default, test files are penalised in ranking (0.3× score multiplier) so that source-code results surface first. The heuristic detects test files across 8+ language conventions (Python `test_*.py`, Java `*Test.java`, JS `*.test.ts`, Go `*_test.go`, Rust `*_test.rs`, C# `*Test.cs`, Ruby `*_spec.rb`, and more) plus directory patterns (`test/`, `tests/`, `spec/`, `src/test/`). When results mix source and test files, a hint reports the split. Disable with `--include-tests`.
 
+**Context Snippets:** The top 3 seed results include an inline snippet of source code (up to 5 lines) to help you immediately decide whether a result is relevant — no separate Read call needed. Configure with `--snippets N` (default 3, 0 to disable).
+
 **Response Format**
 ```
 seeds:
 codeloom/core/pipeline.py:71
-codeloom/query/embeddings.py:70
+  │ def run_pipeline(source_dir: Path, ...) -> PipelineResult:
+  │     """Run the full code graph build pipeline."""
+  │     source_dir = Path(source_dir).resolve()
+storage/store.py:20
+  │ class KnowledgeStore:
 
 edges:
-codeloom/core/pipeline.py:71 -calls-> codeloom/core/extract.py:747
-codeloom/core/pipeline.py:0 -co_change-> codeloom/query/embeddings.py:0
+codeloom/core/pipeline.py:71 -calls-> storage/store.py:20
+codeloom/core/pipeline.py:0 -co_change-> storage/store.py:0
+codeloom/core/pipeline.py:0 -defines-> codeloom/core/pipeline.py:71
 ```
 
-- `seeds`: Node IDs (file:line) found by search
+- `seeds`: Node IDs (file:line) found by search, with optional source snippets
 - `edges`: Subgraph connecting seeds through shortest paths (intermediate nodes appear in edges)
 
 ## CLI Reference
@@ -144,7 +151,7 @@ All commands output compact text by default (designed for AI agent consumption).
 | Command | Description |
 |---------|-------------|
 | `build <dir>` | Build code graph (`--incremental`) |
-| `search <query>` | Hybrid vector + keyword search with subgraph (`--top-k`, `--fast`, `--kind`, `--file`, `--include-tests`) |
+| `search <query>` | Hybrid vector + keyword search with subgraph and snippets (`--top-k`, `--fast`, `--kind`, `--file`, `--include-tests`, `--snippets`) |
 | `search-vector <query>` | Vector similarity only (code + text dual model) |
 | `search-keyword <query>` | FTS5 keyword matching only (BM25 ranking) |
 | `query` | Interactive search REPL |
