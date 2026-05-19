@@ -9,6 +9,7 @@ from codeloom.query.hybrid import (
     _generate_filter_hint,
     _generate_source_test_hint,
     _is_test_file,
+    _read_snippet,
     reciprocal_rank_fusion,
 )
 
@@ -884,3 +885,377 @@ class TestHybridSearchTestPenalty:
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "src/api/handler.py:1" in seed_ids
             assert "tests/test_api.py:1" not in seed_ids
+
+
+class TestReadSnippet:
+    """Tests for _read_snippet helper."""
+
+    def test_reads_first_5_lines(self, tmp_path):
+        f = tmp_path / "a.py"
+        f.write_text("def foo():\n    pass\n\ndef bar():\n    pass\n")
+        snippet = _read_snippet(str(f), start_line=1)
+        assert snippet is not None
+        assert "def foo" in snippet
+        assert snippet.endswith("pass")
+
+    def test_respects_max_lines_default_5(self, tmp_path):
+        f = tmp_path / "b.py"
+        content = "\n".join(f"line {i}" for i in range(1, 11))
+        f.write_text(content)
+        snippet = _read_snippet(str(f), start_line=3)
+        assert snippet is not None
+        assert snippet.count("\n") == 4  # 5 lines = 4 newlines
+
+    def test_respects_end_line_boundary(self, tmp_path):
+        f = tmp_path / "c.py"
+        content = "\n".join(f"line {i}" for i in range(1, 11))
+        f.write_text(content)
+        snippet = _read_snippet(str(f), start_line=3, end_line=5)
+        assert snippet is not None
+        assert snippet.count("\n") == 2  # lines 3, 4, 5 = 3 lines
+
+    def test_end_line_after_max_lines(self, tmp_path):
+        f = tmp_path / "d.py"
+        content = "\n".join(f"line {i}" for i in range(1, 11))
+        f.write_text(content)
+        snippet = _read_snippet(str(f), start_line=3, end_line=20)
+        assert snippet is not None
+        assert snippet.count("\n") == 4  # capped at 5 lines
+
+    def test_returns_none_for_missing_file(self):
+        assert _read_snippet("/nonexistent/file.py", start_line=1) is None
+
+    def test_returns_none_for_empty_path(self):
+        assert _read_snippet("", start_line=1) is None
+
+    def test_returns_none_for_zero_start_line(self):
+        assert _read_snippet("some/file.py", start_line=0) is None
+
+    def test_returns_none_for_start_line_beyond_eof(self, tmp_path):
+        f = tmp_path / "e.py"
+        f.write_text("single line\n")
+        assert _read_snippet(str(f), start_line=100) is None
+
+    def test_strips_trailing_newlines(self, tmp_path):
+        f = tmp_path / "f.py"
+        f.write_text("def foo():\n    pass\n\n\n")
+        snippet = _read_snippet(str(f), start_line=1)
+        assert snippet is not None
+        assert not snippet.endswith("\n")
+
+    def test_empty_file_returns_none(self, tmp_path):
+        f = tmp_path / "g.py"
+        f.write_text("")
+        assert _read_snippet(str(f), start_line=1) is None
+
+    def test_single_line_file(self, tmp_path):
+        f = tmp_path / "h.py"
+        f.write_text("x = 1")
+        snippet = _read_snippet(str(f), start_line=1)
+        assert snippet == "x = 1"
+
+    def test_start_line_mid_file(self, tmp_path):
+        f = tmp_path / "i.py"
+        f.write_text("a\nb\nc\nd\ne\nf\ng\n")
+        snippet = _read_snippet(str(f), start_line=4)
+        assert snippet == "d\ne\nf\ng"
+
+
+class TestSearchResultWithSnippet:
+    """Tests for SearchResult context_snippet field."""
+
+    def test_default_is_empty_string(self):
+        sr = SearchResult(
+            node_id="a.py:1", label="fn", kind="function",
+            file_path="a.py", score=0.5, source="seed",
+        )
+        assert sr.context_snippet == ""
+
+    def test_snippet_preserved(self):
+        sr = SearchResult(
+            node_id="a.py:1", label="fn", kind="function",
+            file_path="a.py", score=0.5, source="seed",
+            context_snippet="def fn():\n    pass",
+        )
+        assert sr.context_snippet == "def fn():\n    pass"
+
+    def test_snippet_in_json_output(self):
+        sg = SearchGraph(
+            nodes=[
+                SearchResult(node_id="a.py:1", label="fn", kind="function",
+                             file_path="a.py", score=0.5, source="seed",
+                             start_line=1,
+                             context_snippet="def fn():\n    pass"),
+            ],
+            edges=[], isolated=[],
+        )
+        seed = sg.to_json()["seeds"][0]
+        assert seed["snippet"] == "def fn():\n    pass"
+
+    def test_omits_snippet_key_when_empty(self):
+        sg = SearchGraph(
+            nodes=[
+                SearchResult(node_id="a.py:1", label="fn", kind="function",
+                             file_path="a.py", score=0.5, source="seed",
+                             start_line=1, context_snippet=""),
+            ],
+            edges=[], isolated=[],
+        )
+        seed = sg.to_json()["seeds"][0]
+        assert "snippet" not in seed
+
+
+class TestSearchGraphSnippetOutput:
+    """Tests for snippet rendering in to_text and to_json."""
+
+    def test_to_text_shows_snippet_with_pipe_prefix(self):
+        sg = SearchGraph(
+            nodes=[
+                SearchResult(node_id="a.py:1", label="fn", kind="function",
+                             file_path="a.py", score=0.5, source="seed",
+                             context_snippet="def fn():\n    pass"),
+            ],
+            edges=[], isolated=[],
+        )
+        text = sg.to_text()
+        assert "def fn()" in text
+        assert "  │ def fn()" in text
+        assert "  │     pass" in text
+
+    def test_to_text_without_snippet_stays_clean(self):
+        sg = SearchGraph(
+            nodes=[
+                SearchResult(node_id="a.py:1", label="fn", kind="function",
+                             file_path="a.py", score=0.5, source="seed",
+                             context_snippet=""),
+            ],
+            edges=[], isolated=[],
+        )
+        text = sg.to_text()
+        assert "a.py:1" in text
+        assert "│" not in text
+
+    def test_to_text_multiline_snippet(self, tmp_path):
+        sg = SearchGraph(
+            nodes=[
+                SearchResult(node_id="a.py:1", label="fn", kind="function",
+                             file_path="a.py", score=0.5, source="seed",
+                             context_snippet="line1\nline2\nline3"),
+            ],
+            edges=[], isolated=[],
+        )
+        text = sg.to_text()
+        lines = text.split("\n")
+        assert lines[1] == "a.py:1 (score: 0.5)"
+        assert lines[2] == "  │ line1"
+        assert lines[3] == "  │ line2"
+        assert lines[4] == "  │ line3"
+
+
+class TestHybridSearchSnippets:
+    """Integration tests for snippet_count in hybrid_search."""
+
+    def _clear(self):
+        from codeloom.query.hybrid import clear_search_cache
+        clear_search_cache()
+
+    def _write_file(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    def test_snippet_count_zero_no_snippets(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        self._write_file(tmp_path / "src" / "a.py", "def foo():\n    return 1\n")
+
+        G = nx.DiGraph()
+        G.add_node(str(tmp_path / "src/a.py:1"), kind="function",
+                    file_path=str(tmp_path / "src/a.py"), label="foo", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (str(tmp_path / "src/a.py:1"), 0.9),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("foo", mock_store, G, top_k=10, snippet_count=0)
+            for node in result.nodes:
+                if node.source == "seed":
+                    assert node.context_snippet == ""
+
+    def test_snippet_count_3_populates_top_seeds(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        self._write_file(tmp_path / "a.py", "def one():\n    return 1\n")
+        self._write_file(tmp_path / "b.py", "def two():\n    return 2\n")
+        self._write_file(tmp_path / "c.py", "def three():\n    return 3\n")
+        self._write_file(tmp_path / "d.py", "def four():\n    return 4\n")
+
+        G = nx.DiGraph()
+        G.add_node(str(tmp_path / "a.py:1"), kind="function",
+                    file_path=str(tmp_path / "a.py"), label="one", start_line=1)
+        G.add_node(str(tmp_path / "b.py:1"), kind="function",
+                    file_path=str(tmp_path / "b.py"), label="two", start_line=1)
+        G.add_node(str(tmp_path / "c.py:1"), kind="function",
+                    file_path=str(tmp_path / "c.py"), label="three", start_line=1)
+        G.add_node(str(tmp_path / "d.py:1"), kind="function",
+                    file_path=str(tmp_path / "d.py"), label="four", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (str(tmp_path / "a.py:1"), 0.9),
+            (str(tmp_path / "b.py:1"), 0.8),
+            (str(tmp_path / "c.py:1"), 0.7),
+            (str(tmp_path / "d.py:1"), 0.6),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("functions", mock_store, G, top_k=10, snippet_count=3)
+            all_seeds = [n for n in result.nodes if n.source == "seed"]
+            all_seeds += [n for n in result.isolated if n.source == "seed"]
+            populated = [s for s in all_seeds if s.context_snippet]
+            assert len(populated) == 3
+            assert "def one" in all_seeds[0].context_snippet
+            assert "def two" in all_seeds[1].context_snippet
+            assert "def three" in all_seeds[2].context_snippet
+            assert all_seeds[3].context_snippet == ""
+
+    def test_snippet_count_greater_than_available_seeds(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        self._write_file(tmp_path / "a.py", "def one():\n    return 1\n")
+
+        G = nx.DiGraph()
+        G.add_node(str(tmp_path / "a.py:1"), kind="function",
+                    file_path=str(tmp_path / "a.py"), label="one", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (str(tmp_path / "a.py:1"), 0.9),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("one", mock_store, G, top_k=10, snippet_count=5)
+            seeds = [n for n in result.nodes if n.source == "seed"]
+            # Should populate the only available seed
+            assert len(seeds) == 1
+            assert "def one" in seeds[0].context_snippet
+
+    def test_path_nodes_never_get_snippets(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        self._write_file(tmp_path / "a.py", "def a():\n    return 1\n")
+        self._write_file(tmp_path / "b.py", "def b():\n    return 2\n")
+
+        G = nx.DiGraph()
+        a = str(tmp_path / "a.py:1")
+        b = str(tmp_path / "b.py:1")
+        G.add_node(a, kind="function", file_path=str(tmp_path / "a.py"),
+                    label="a_fn", start_line=1)
+        G.add_node(b, kind="function", file_path=str(tmp_path / "b.py"),
+                    label="b_fn", start_line=1)
+        G.add_edge(a, b, relation="calls")
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (a, 0.9),
+            (b, 0.8),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("functions", mock_store, G, top_k=10, snippet_count=5)
+            for node in result.nodes:
+                if node.source == "path":
+                    assert node.context_snippet == ""
+
+    def test_snippet_in_to_text_format(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        self._write_file(tmp_path / "a.py", "def foo():\n    pass\n")
+
+        G = nx.DiGraph()
+        G.add_node(str(tmp_path / "a.py:1"), kind="function",
+                    file_path=str(tmp_path / "a.py"), label="foo", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (str(tmp_path / "a.py:1"), 0.9),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("foo", mock_store, G, top_k=10, snippet_count=3)
+            text = result.to_text()
+            assert "  │ def foo()" in text
+            assert "  │     pass" in text
+
+    def test_missing_file_snippet_is_empty(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        G = nx.DiGraph()
+        G.add_node(str(tmp_path / "missing.py:1"), kind="function",
+                    file_path=str(tmp_path / "missing.py"), label="gone", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            (str(tmp_path / "missing.py:1"), 0.9),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            result = hybrid_search("gone", mock_store, G, top_k=10, snippet_count=3)
+            seeds = [n for n in result.nodes if n.source == "seed"]
+            assert len(seeds) == 1
+            assert seeds[0].context_snippet == ""

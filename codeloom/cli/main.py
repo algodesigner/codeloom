@@ -147,12 +147,19 @@ def build(
     default=False,
     help="Give test files equal ranking weight. By default, test files are demoted.",
 )
+@click.option(
+    "--snippets",
+    type=int,
+    default=3,
+    help="Number of top seed results to annotate with source snippets (0 = disabled)",
+)
 @click.pass_context
 def search(
     ctx, query: str, db: str | None, top_k: int, source_dir: str,
     fast: bool, json_output: bool, kind: str | None = None,
     file_pattern: str | None = None,
     include_tests: bool = False,
+    snippets: int = 0,
 ):
     """Search the code graph with hybrid vector + graph + keyword search."""
     from codeloom.query.hybrid import hybrid_search
@@ -188,6 +195,7 @@ def search(
         kind=kind,
         file_pattern=file_pattern,
         penalise_tests=not include_tests,
+        snippet_count=snippets,
     )
 
     source_dir_str = str(Path(source_dir).resolve()) + "/"

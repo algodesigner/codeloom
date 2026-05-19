@@ -112,6 +112,7 @@ def search(
     kind: str | None = None,
     file_pattern: str | None = None,
     include_tests: bool = False,
+    snippets: bool = True,
 ) -> str:
     """Search the code graph. This is the PRIMARY tool — use it first.
 
@@ -128,6 +129,7 @@ def search(
         file_pattern: Filter by file path glob (e.g. "src/auth/*")
         include_tests: Give test files equal ranking weight (default False,
               test files are demoted 0.3x).
+        snippets: Show source snippets for top results (default True).
     """
     store, G = _load()
     from codeloom.query.hybrid import hybrid_search
@@ -136,6 +138,7 @@ def search(
         query, store, G, top_k=top_k, fast=fast,
         kind=kind, file_pattern=file_pattern,
         penalise_tests=not include_tests,
+        snippet_count=3 if snippets else 0,
     )
     source_dir = str(Path(_get_db_path()).parent.parent) + "/"
     return graph.to_text(source_dir=source_dir)

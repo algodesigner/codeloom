@@ -110,6 +110,7 @@ class SearchResult:
     signature: str = ""
     docstring: str = ""
     signal_contributions: dict[str, float] = field(default_factory=dict)
+    context_snippet: str = ""
 
 
 @dataclass
@@ -153,6 +154,9 @@ class SearchGraph:
             if n.source == "seed":
                 sid = _s(n.node_id)
                 seed_ids.append(f"{sid} (score: {n.score})")
+                if n.context_snippet:
+                    for line in n.context_snippet.split("\n"):
+                        seed_ids.append(f"  │ {line}")
 
         lines = ["seeds:"]
         for sid in seed_ids:
@@ -187,7 +191,7 @@ class SearchGraph:
         seeds = []
         for n in self.nodes:
             if n.source == "seed":
-                seeds.append({
+                sd = {
                     "id": _s(n.node_id),
                     "label": n.label,
                     "kind": n.kind,
@@ -196,7 +200,10 @@ class SearchGraph:
                     "score": n.score,
                     "signature": n.signature,
                     "signal_contributions": n.signal_contributions,
-                })
+                }
+                if n.context_snippet:
+                    sd["snippet"] = n.context_snippet
+                seeds.append(sd)
 
         edges = [
             {"from": _s(e.source), "to": _s(e.target), "relation": e.relation}
@@ -410,6 +417,33 @@ def _generate_source_test_hint(
         )
 
 
+def _read_snippet(file_path: str, start_line: int, end_line: int = 0,
+                  max_lines: int = 5) -> str | None:
+    """Read a few lines of source code starting from start_line.
+
+    Returns at most max_lines lines (fewer if end_line is reached first).
+    Returns None if the file cannot be read or start_line is invalid.
+    """
+    if not file_path or not start_line:
+        return None
+    try:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
+            file_lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    idx = start_line - 1
+    if idx < 0 or idx >= len(file_lines):
+        return None
+
+    finish = min(len(file_lines), idx + max_lines)
+    if end_line and end_line > start_line:
+        finish = min(finish, end_line)
+
+    snippet = "".join(file_lines[idx:finish]).rstrip("\n")
+    return snippet if snippet else None
+
+
 def extract_search_terms(query: str) -> list[str]:
     """Extract search terms by removing stopwords and short tokens."""
     return [
@@ -593,6 +627,7 @@ def hybrid_search(
     kind: str | None = None,
     file_pattern: str | None = None,
     penalise_tests: bool = True,
+    snippet_count: int = 0,
 ) -> SearchGraph:
     """5-signal search + shortest-path subgraph response.
 
@@ -611,6 +646,7 @@ def hybrid_search(
             " enum, struct, trait, section).
         file_pattern: Filter by file path glob (e.g. "src/auth/*").
         penalise_tests: Demote test files in ranking by TEST_PENALTY_FACTOR (default True).
+        snippet_count: Number of top seed results to annotate with source snippets (0 = none).
 
     Returns:
         SearchGraph containing seed nodes, path nodes, and edges.
@@ -755,6 +791,26 @@ def hybrid_search(
         nodes.append(_make_result(node_id, 0.0, data, "path"))
 
     result = SearchGraph(nodes=nodes, edges=path_edges, isolated=isolated_nodes)
+
+    # Stage 9.5: Populate context snippets for top seeds
+    if snippet_count > 0:
+        count = 0
+        for node in result.nodes:
+            if count >= snippet_count:
+                break
+            if node.source == "seed":
+                node.context_snippet = _read_snippet(
+                    node.file_path, node.start_line, node.end_line,
+                ) or ""
+                count += 1
+        for node in result.isolated:
+            if count >= snippet_count:
+                break
+            if node.source == "seed":
+                node.context_snippet = _read_snippet(
+                    node.file_path, node.start_line, node.end_line,
+                ) or ""
+                count += 1
 
     # Generate filter hint
     hint = _generate_filter_hint(seed_nodes, kind, file_pattern, top_k)
