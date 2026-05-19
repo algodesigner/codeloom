@@ -1,9 +1,11 @@
 """Git co-change extraction — mines evolutionary coupling from VCS history.
 
-Analyzes git log to find files that are frequently changed together (co-committed),
+Analyzes git log to find files that are frequently changed together
+(co-committed),
 producing co_change edges that complement static analysis relationships.
 
-Based on: Zimmermann et al. (2005) "Mining version histories to guide software changes"
+Based on: Zimmermann et al. (2005) "Mining version histories to guide
+software changes"
 and Tornhill (2015) "Your Code as a Crime Scene".
 """
 
@@ -101,13 +103,15 @@ def parse_git_log(
     Args:
         source_dir: Directory inside the git repo.
         max_commits: Maximum number of commits to process (0 = all history).
-        since: Git date filter (e.g. "2 years ago"). Defaults to None (all history).
+        since: Git date filter (e.g. "2 years ago"). Defaults to None
+            (all history).
 
     Returns:
         List of CommitInfo with resolved file paths.
     """
     cmd = [
-        "git", "log",
+        "git",
+        "log",
         f"--pretty=format:{_LOG_FORMAT}",
         "--name-status",
         "--no-merges",
@@ -181,12 +185,14 @@ def _parse_log_output(output: str) -> list[CommitInfo]:
                     files.append(parts[1])
 
         if files:
-            commits.append(CommitInfo(
-                hash=commit_hash,
-                timestamp=timestamp,
-                message=message,
-                files=files,
-            ))
+            commits.append(
+                CommitInfo(
+                    hash=commit_hash,
+                    timestamp=timestamp,
+                    message=message,
+                    files=files,
+                )
+            )
 
     # Resolve rename chains: apply all renames to normalize paths
     _resolve_renames(commits, rename_map)
@@ -194,7 +200,8 @@ def _parse_log_output(output: str) -> list[CommitInfo]:
 
 
 def _resolve_renames(
-    commits: list[CommitInfo], rename_map: dict[str, str],
+    commits: list[CommitInfo],
+    rename_map: dict[str, str],
 ) -> None:
     """Canonicalize file paths using rename history.
 
@@ -277,7 +284,10 @@ def compute_cochange_pairs(
             except ValueError:
                 continue  # file is outside source_dir
 
-        if len(relevant_files) > max_files_per_commit or len(relevant_files) < 2:
+        if (
+            len(relevant_files) > max_files_per_commit
+            or len(relevant_files) < 2
+        ):
             continue
 
         # Time-decay weight for this commit
@@ -321,15 +331,17 @@ def compute_cochange_pairs(
         src_id = _file_to_module_id(file_a)
         tgt_id = _file_to_module_id(file_b)
 
-        edges.append(CoChangeEdge(
-            source=src_id,
-            target=tgt_id,
-            co_change_count=count,
-            strength=round(strength, 4),
-            recency=round(recency, 4),
-            confidence=confidence,
-            sample_messages=pair_messages[(file_a, file_b)],
-        ))
+        edges.append(
+            CoChangeEdge(
+                source=src_id,
+                target=tgt_id,
+                co_change_count=count,
+                strength=round(strength, 4),
+                recency=round(recency, 4),
+                confidence=confidence,
+                sample_messages=pair_messages[(file_a, file_b)],
+            )
+        )
 
     edges.sort(key=lambda e: e.strength, reverse=True)
     return edges
@@ -415,7 +427,9 @@ def enrich_graph_with_cochange(
     _progress("Parsing git history")
     t0 = time.perf_counter()
     commits = parse_git_log(source_path, max_commits=max_commits, since=since)
-    _progress(f"Parsed {len(commits)} commits in {time.perf_counter() - t0:.1f}s")
+    _progress(
+        f"Parsed {len(commits)} commits in {time.perf_counter() - t0:.1f}s",
+    )
 
     if not commits:
         _progress("No commits found")
@@ -454,12 +468,21 @@ def enrich_graph_with_cochange(
         src_node = rel_to_node.get(src_rel)
         tgt_node = rel_to_node.get(tgt_rel)
 
-        if src_node and tgt_node and G.has_node(src_node) and G.has_node(tgt_node):
+        if (
+            src_node
+            and tgt_node
+            and G.has_node(src_node)
+            and G.has_node(tgt_node)
+        ):
             # Add both directions (co-change is symmetric)
             for src, tgt in [(src_node, tgt_node), (tgt_node, src_node)]:
-                if not G.has_edge(src, tgt) or G.edges[src, tgt].get("relation") != "co_change":
+                if (
+                    not G.has_edge(src, tgt)
+                    or G.edges[src, tgt].get("relation") != "co_change"
+                ):
                     G.add_edge(
-                        src, tgt,
+                        src,
+                        tgt,
                         relation="co_change",
                         confidence=edge.confidence,
                         co_change_count=edge.co_change_count,

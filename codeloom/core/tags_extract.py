@@ -276,7 +276,8 @@ def _get_lang_resources(language: str) -> dict[str, Any] | None:
         # Try getting TAGS_QUERY: attribute first, then file fallback
         tags_query_str = getattr(mod, "TAGS_QUERY", None)
 
-        # TypeScript: combine JS tags (has class/function) + TS tags (has interface/type)
+        # TypeScript: combine JS tags (has class/function) + TS tags
+        # (has interface/type)
         if language == "typescript":
             tags_query_str = _build_typescript_tags()
 
@@ -310,6 +311,7 @@ def _build_typescript_tags() -> str | None:
     """
     try:
         import tree_sitter_typescript
+
         ts_tags = getattr(tree_sitter_typescript, "TAGS_QUERY", "")
     except ImportError:
         return None
@@ -373,7 +375,8 @@ def _build_typescript_tags() -> str | None:
 (new_expression
   constructor: (_) @name) @reference.class
 
-(export_statement value: (assignment_expression left: (identifier) @name right: ([
+(export_statement value: (assignment_expression left: (identifier)
+ @name right: ([
  (number)
  (string)
  (identifier)
@@ -398,6 +401,7 @@ def _load_tags_file(pkg_name: str) -> str | None:
     # Try installed package first
     try:
         from importlib.resources import files
+
         tags_path = files(f"tree_sitter_{pkg_name}") / "queries" / "tags.scm"
         if tags_path.is_file():
             return tags_path.read_text()
@@ -406,7 +410,9 @@ def _load_tags_file(pkg_name: str) -> str | None:
 
     # Fallback: local queries directory
     try:
-        local_path = Path(__file__).parent.parent / "queries" / f"{pkg_name}-tags.scm"
+        local_path = (
+            Path(__file__).parent.parent / "queries" / f"{pkg_name}-tags.scm"
+        )
         if local_path.is_file():
             return local_path.read_text()
     except Exception:
@@ -425,7 +431,8 @@ def _make_query(lang_obj: Language, query_str: str) -> Query | None:
 
 
 def _run_matches(
-    query: Query, root_node: Any,
+    query: Query,
+    root_node: Any,
 ) -> list[tuple[int, dict[str, list[Any]]]]:
     """Run query.matches() via QueryCursor."""
     cursor = QueryCursor(query)
@@ -433,7 +440,8 @@ def _run_matches(
 
 
 def _run_captures(
-    query: Query, root_node: Any,
+    query: Query,
+    root_node: Any,
 ) -> dict[str, list[Any]]:
     """Run query.captures() via QueryCursor."""
     cursor = QueryCursor(query)
@@ -442,14 +450,16 @@ def _run_captures(
 
 def _node_text(node: Any, source_bytes: bytes) -> str:
     """Extract text from a tree-sitter node."""
-    return source_bytes[node.start_byte:node.end_byte].decode(
-        "utf-8", errors="replace",
+    return source_bytes[node.start_byte : node.end_byte].decode(
+        "utf-8",
+        errors="replace",
     )
 
 
 # ---------------------------------------------------------------------------
 # Core extraction logic
 # ---------------------------------------------------------------------------
+
 
 def extract_file_tags(
     file_path: str,
@@ -487,13 +497,15 @@ def extract_file_tags(
 
     # Module node
     module_id = _make_node_id(file_path, Path(file_path).stem, "module")
-    result.nodes.append(ExtractedNode(
-        id=module_id,
-        name=Path(file_path).stem,
-        kind="module",
-        file_path=file_path,
-        language=language,
-    ))
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language=language,
+        )
+    )
 
     # --- Phase 1: tags.scm matches ---
     try:
@@ -537,7 +549,9 @@ def extract_file_tags(
         # Process definition
         if def_capture is not None and def_kind is not None:
             node_id = _make_node_id(
-                file_path, name_text, def_kind,
+                file_path,
+                name_text,
+                def_kind,
                 start_line=def_capture.start_point[0] + 1,  # 1-based行番号
             )
 
@@ -547,26 +561,30 @@ def extract_file_tags(
             # Extract signature from AST (parameters node)
             signature = _extract_signature(def_capture, source_bytes)
 
-            result.nodes.append(ExtractedNode(
-                id=node_id,
-                name=name_text,
-                kind=def_kind,
-                file_path=file_path,
-                language=language,
-                start_line=def_capture.start_point[0],
-                end_line=def_capture.end_point[0],
-                docstring=doc_text,
-                signature=signature,
-                # ソーススニペットを最大文字数で切り詰める
-                source_snippet=full_source[:MAX_SNIPPET_CHARS],
-            ))
-            definitions.append({
-                "node_id": node_id,
-                "name": name_text,
-                "kind": def_kind,
-                "start_byte": def_capture.start_byte,
-                "end_byte": def_capture.end_byte,
-            })
+            result.nodes.append(
+                ExtractedNode(
+                    id=node_id,
+                    name=name_text,
+                    kind=def_kind,
+                    file_path=file_path,
+                    language=language,
+                    start_line=def_capture.start_point[0],
+                    end_line=def_capture.end_point[0],
+                    docstring=doc_text,
+                    signature=signature,
+                    # ソーススニペットを最大文字数で切り詰める
+                    source_snippet=full_source[:MAX_SNIPPET_CHARS],
+                )
+            )
+            definitions.append(
+                {
+                    "node_id": node_id,
+                    "name": name_text,
+                    "kind": def_kind,
+                    "start_byte": def_capture.start_byte,
+                    "end_byte": def_capture.end_byte,
+                }
+            )
 
         # Process reference
         elif ref_capture is not None and ref_info is not None:
@@ -576,14 +594,18 @@ def extract_file_tags(
             )
             # Find enclosing definition as the caller
             caller_id = _find_enclosing(
-                ref_capture, definitions, module_id,
+                ref_capture,
+                definitions,
+                module_id,
             )
-            result.edges.append(ExtractedEdge(
-                caller_id,
-                f"{target_prefix}{clean_name}",
-                relation,
-                confidence="INFERRED",
-            ))
+            result.edges.append(
+                ExtractedEdge(
+                    caller_id,
+                    f"{target_prefix}{clean_name}",
+                    relation,
+                    confidence="INFERRED",
+                )
+            )
 
     # Build containment edges (parent → child via byte range nesting)
     # Also prefix method/function names with parent class name (e.g. Dog.bark)
@@ -595,7 +617,8 @@ def extract_file_tags(
         parent = stack[-1] if stack else None
         parent_id = parent["node_id"] if parent else module_id
 
-        # Prefix method names with parent class/interface (e.g. "bark" → "Dog.bark")
+        # Prefix method names with parent class/interface
+        # (e.g. "bark" → "Dog.bark")
         is_container = parent and parent["kind"] in ("class", "interface")
         if is_container and d["kind"] in ("method", "function"):
             old_name = d["name"]
@@ -607,7 +630,12 @@ def extract_file_tags(
                 if node.id == old_id:
                     _rename_start = node.start_line + 1
                     break
-            new_id = _make_node_id(file_path, new_name, d["kind"], start_line=_rename_start)
+            new_id = _make_node_id(
+                file_path,
+                new_name,
+                d["kind"],
+                start_line=_rename_start,
+            )
             # Update the node in result
             for node in result.nodes:
                 if node.id == old_id:
@@ -621,26 +649,52 @@ def extract_file_tags(
         stack.append(d)
 
     # --- Phase 2: Supplementary constants (JS/TS: const UPPER_CASE = ...) ---
-    _extract_constants(lang_obj, root, source_bytes, file_path, language,
-                       defs_sorted, module_id, result)
+    _extract_constants(
+        lang_obj,
+        root,
+        source_bytes,
+        file_path,
+        language,
+        defs_sorted,
+        module_id,
+        result,
+    )
 
     # --- Phase 3: Supplementary imports ---
     _extract_imports(lang_obj, root, source_bytes, module_id, language, result)
 
     # --- Phase 4: Supplementary inheritance ---
     _extract_inheritance(
-        lang_obj, root, source_bytes, defs_sorted, module_id, language, result,
+        lang_obj,
+        root,
+        source_bytes,
+        defs_sorted,
+        module_id,
+        language,
+        result,
     )
 
     # --- Phase 5: Supplementary type declarations (type_alias, enum) ---
     _extract_type_decls(
-        lang_obj, root, source_bytes, file_path, language,
-        defs_sorted, module_id, result,
+        lang_obj,
+        root,
+        source_bytes,
+        file_path,
+        language,
+        defs_sorted,
+        module_id,
+        result,
     )
 
     # --- Phase 6: Interface extends (uses "extends" relation for compat) ---
     _extract_interface_extends(
-        lang_obj, root, source_bytes, defs_sorted, module_id, language, result,
+        lang_obj,
+        root,
+        source_bytes,
+        defs_sorted,
+        module_id,
+        language,
+        result,
     )
 
     return result
@@ -680,7 +734,8 @@ def _extract_constants(
     module_id: str,
     result: ExtractionResult,
 ) -> None:
-    """Extract top-level constant/variable definitions not caught by tags.scm."""
+    """Extract top-level constant/variable definitions not caught by
+    tags.scm."""
     query_str = _CONSTANT_QUERIES.get(language)
     if not query_str:
         return
@@ -697,25 +752,34 @@ def _extract_constants(
                 continue
             if not (name.isupper() or name.startswith("_")):
                 continue
-            node_id = _make_node_id(file_path, name, "variable", start_line=node.start_point[0] + 1)
+            node_id = _make_node_id(
+                file_path,
+                name,
+                "variable",
+                start_line=node.start_point[0] + 1,
+            )
             const_node = node.parent  # variable_declarator or assignment
             if const_node and const_node.parent:
                 const_node = const_node.parent  # lexical_declaration
             start_line = node.start_point[0]
             end_line = const_node.end_point[0] if const_node else start_line
-            result.nodes.append(ExtractedNode(
-                id=node_id,
-                name=name,
-                kind="variable",
-                file_path=file_path,
-                language=language,
-                start_line=start_line,
-                end_line=end_line,
-                # 定数ノードのスニペットを最大文字数で切り詰める
-                source_snippet=(
-                    _node_text(const_node, source_bytes) if const_node else name
-                )[:MAX_SNIPPET_CHARS],
-            ))
+            result.nodes.append(
+                ExtractedNode(
+                    id=node_id,
+                    name=name,
+                    kind="variable",
+                    file_path=file_path,
+                    language=language,
+                    start_line=start_line,
+                    end_line=end_line,
+                    # 定数ノードのスニペットを最大文字数で切り詰める
+                    source_snippet=(
+                        _node_text(const_node, source_bytes)
+                        if const_node
+                        else name
+                    )[:MAX_SNIPPET_CHARS],
+                )
+            )
             parent_id = _find_enclosing(node, defs_sorted, module_id)
             result.edges.append(ExtractedEdge(parent_id, node_id, "defines"))
     except Exception as e:
@@ -742,11 +806,13 @@ def _extract_imports(
         for node in captures.get("name", []):
             mod_name = _node_text(node, source_bytes).strip("\"'")
             if mod_name:
-                result.edges.append(ExtractedEdge(
-                    module_id,
-                    f"*::module::{mod_name}",
-                    "imports",
-                ))
+                result.edges.append(
+                    ExtractedEdge(
+                        module_id,
+                        f"*::module::{mod_name}",
+                        "imports",
+                    )
+                )
     except Exception as e:
         logger.debug("Import query failed for %s: %s", language, e)
 
@@ -772,13 +838,18 @@ def _extract_inheritance(
         for node in captures.get("name", []):
             base_name = _node_text(node, source_bytes)
             class_id = _find_enclosing(
-                node, defs_sorted, module_id, kind_filter="class",
+                node,
+                defs_sorted,
+                module_id,
+                kind_filter="class",
             )
-            result.edges.append(ExtractedEdge(
-                class_id,
-                f"*::class::{base_name}",
-                "inherits",
-            ))
+            result.edges.append(
+                ExtractedEdge(
+                    class_id,
+                    f"*::class::{base_name}",
+                    "inherits",
+                )
+            )
     except Exception as e:
         logger.debug("Inheritance query failed for %s: %s", language, e)
 
@@ -792,8 +863,12 @@ def _extract_signature(node: Any, source_bytes: bytes) -> str:
     params_text = ""
     return_type = ""
     for child in node.children:
-        if child.type in ("parameters", "formal_parameters",
-                          "parameter_list", "argument_list"):
+        if child.type in (
+            "parameters",
+            "formal_parameters",
+            "parameter_list",
+            "argument_list",
+        ):
             params_text = _node_text(child, source_bytes)
         elif child.type in ("return_type", "type"):
             # Python return type annotation, etc.
@@ -877,22 +952,35 @@ def _extract_type_decls(
             if "_enum" in match_dict:
                 kind = "enum"
 
-            decl_node = match_dict.get("_type_alias", match_dict.get("_enum", [None]))[0]
+            decl_node = match_dict.get(
+                "_type_alias",
+                match_dict.get("_enum", [None]),
+            )[0]
             if decl_node is None:
                 continue
 
-            node_id = _make_node_id(file_path, name, kind, start_line=decl_node.start_point[0] + 1)
-            result.nodes.append(ExtractedNode(
-                id=node_id,
-                name=name,
-                kind=kind,
-                file_path=file_path,
-                language=language,
-                start_line=decl_node.start_point[0],
-                end_line=decl_node.end_point[0],
-                # 宣言ノードのスニペットを最大文字数で切り詰める
-                source_snippet=_node_text(decl_node, source_bytes)[:MAX_SNIPPET_CHARS],
-            ))
+            node_id = _make_node_id(
+                file_path,
+                name,
+                kind,
+                start_line=decl_node.start_point[0] + 1,
+            )
+            result.nodes.append(
+                ExtractedNode(
+                    id=node_id,
+                    name=name,
+                    kind=kind,
+                    file_path=file_path,
+                    language=language,
+                    start_line=decl_node.start_point[0],
+                    end_line=decl_node.end_point[0],
+                    # 宣言ノードのスニペットを最大文字数で切り詰める
+                    source_snippet=_node_text(
+                        decl_node,
+                        source_bytes,
+                    )[:MAX_SNIPPET_CHARS],
+                )
+            )
             parent_id = _find_enclosing(decl_node, defs_sorted, module_id)
             result.edges.append(ExtractedEdge(parent_id, node_id, "defines"))
             existing_names.add(name)
@@ -900,8 +988,13 @@ def _extract_type_decls(
             # Extract enum members
             if kind == "enum":
                 _extract_enum_members(
-                    lang_obj, decl_node, source_bytes, file_path,
-                    language, node_id, result,
+                    lang_obj,
+                    decl_node,
+                    source_bytes,
+                    file_path,
+                    language,
+                    node_id,
+                    result,
                 )
     except Exception as e:
         logger.debug("Type decl query failed for %s: %s", language, e)
@@ -935,17 +1028,21 @@ def _extract_enum_members(
             member_name = _node_text(node, source_bytes)
             full_name = f"{enum_name}.{member_name}"
             member_id = _make_node_id(
-                file_path, full_name, "variable",
+                file_path,
+                full_name,
+                "variable",
                 start_line=node.start_point[0] + 1,  # 1-based行番号
             )
-            result.nodes.append(ExtractedNode(
-                id=member_id,
-                name=full_name,
-                kind="variable",
-                file_path=file_path,
-                language=language,
-                start_line=node.start_point[0],
-            ))
+            result.nodes.append(
+                ExtractedNode(
+                    id=member_id,
+                    name=full_name,
+                    kind="variable",
+                    file_path=file_path,
+                    language=language,
+                    start_line=node.start_point[0],
+                )
+            )
             result.edges.append(ExtractedEdge(enum_id, member_id, "defines"))
     except Exception as e:
         logger.debug("Enum member query failed: %s", e)
@@ -960,7 +1057,8 @@ def _extract_interface_extends(
     language: str,
     result: ExtractionResult,
 ) -> None:
-    """Extract interface extends edges (uses 'extends' relation for backward compat).
+    """Extract interface extends edges (uses 'extends' relation for
+    backward compat).
 
     Uses AST walking instead of query to avoid cross-parser compatibility issues
     with `extends_type_clause` node types.
@@ -980,7 +1078,8 @@ def _walk_extends(
     module_id: str,
     result: ExtractionResult,
 ) -> None:
-    """Walk AST to find extends_type_clause nodes inside interface declarations."""
+    """Walk AST to find extends_type_clause nodes inside interface
+    declarations."""
     if node.type == "interface_declaration":
         iface_name = ""
         for child in node.children:
@@ -994,14 +1093,19 @@ def _walk_extends(
                         # Find matching interface node id
                         iface_id = module_id
                         for d in defs_sorted:
-                            if d["kind"] == "interface" and d["name"] == iface_name:
+                            if (
+                                d["kind"] == "interface"
+                                and d["name"] == iface_name
+                            ):
                                 iface_id = d["node_id"]
                                 break
-                        result.edges.append(ExtractedEdge(
-                            iface_id,
-                            f"*::interface::{base_name}",
-                            "extends",
-                        ))
+                        result.edges.append(
+                            ExtractedEdge(
+                                iface_id,
+                                f"*::interface::{base_name}",
+                                "extends",
+                            )
+                        )
     for child in node.children:
         _walk_extends(child, source_bytes, defs_sorted, module_id, result)
 
@@ -1028,11 +1132,28 @@ def _find_enclosing(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def supported_languages() -> list[str]:
     """Return list of languages with tags.scm support available."""
     candidates = [
-        "python", "javascript", "typescript", "go", "rust", "java",
-        "c", "cpp", "c_sharp", "ruby", "swift", "scala", "lua",
-        "php", "elixir", "kotlin", "objc",
+        "python",
+        "javascript",
+        "typescript",
+        "go",
+        "rust",
+        "java",
+        "c",
+        "cpp",
+        "c_sharp",
+        "ruby",
+        "swift",
+        "scala",
+        "lua",
+        "php",
+        "elixir",
+        "kotlin",
+        "objc",
     ]
-    return [lang for lang in candidates if _get_lang_resources(lang) is not None]
+    return [
+        lang for lang in candidates if _get_lang_resources(lang) is not None
+    ]

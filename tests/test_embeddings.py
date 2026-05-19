@@ -1,4 +1,5 @@
-"""Tests for embedding generation — text construction, kind routing, and caching."""
+"""Tests for embedding generation — text construction, kind routing,
+and caching."""
 
 from unittest.mock import MagicMock, patch
 
@@ -59,21 +60,31 @@ class TestModelConfig:
 
 class TestNodeTextConstruction:
     def test_node_text_for_function(self):
-        data = {"label": "connect", "signature": "(config) -> Conn",
-                "docstring": "Create a database connection."}
+        data = {
+            "label": "connect",
+            "signature": "(config) -> Conn",
+            "docstring": "Create a database connection.",
+        }
         text = _node_text(data)
         assert "connect" in text
         assert "(config) -> Conn" in text
         assert "database" in text
 
     def test_node_text_for_class(self):
-        data = {"label": "DatabaseService", "docstring": "Manages database connections."}
+        data = {
+            "label": "DatabaseService",
+            "docstring": "Manages database connections.",
+        }
         text = _node_text(data)
         assert "DatabaseService" in text
         assert "database" in text
 
     def test_node_text_falls_back_to_snippet(self):
-        data = {"label": "run", "signature": "()", "source_snippet": "def run():\n    pass"}
+        data = {
+            "label": "run",
+            "signature": "()",
+            "source_snippet": "def run():\n    pass",
+        }
         text = _node_text(data)
         assert "def run" in text.lower()
 
@@ -112,30 +123,49 @@ class TestExtractSearchTerms:
 class TestEmbedQuery:
     def test_embed_query_returns_vector(self):
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
             from codeloom.query.embeddings import embed_query
+
             vec = embed_query("test query", TEXT_MODEL)
             assert isinstance(vec, np.ndarray)
             assert vec.shape[-1] == 384
 
     def test_embed_query_with_prefix(self):
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
             from codeloom.query.embeddings import embed_query
+
             embed_query("test", TEXT_MODEL)
             args, _ = mock_model.encode.call_args
-            assert any("query" in str(a).lower() for a in args[0]) if isinstance(args[0], list) else True
+            assert (
+                any("query" in str(a).lower() for a in args[0])
+                if isinstance(args[0], list)
+                else True
+            )
 
     def test_embed_query_dual_returns_both(self):
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
             from codeloom.query.embeddings import embed_query_dual
+
             result = embed_query_dual("test query")
             assert "code" in result
             assert "text" in result
@@ -148,6 +178,7 @@ class TestEmbedQuery:
             mock_st.return_value = mock_instance
 
             from codeloom.query.embeddings import _get_model, _models
+
             _models.clear()
             model1 = _get_model("test-model")
             model2 = _get_model("test-model")
@@ -158,17 +189,33 @@ class TestEmbedQuery:
 class TestEmbedNodesStreaming:
     def test_embed_nodes_yields_batches(self):
         G = nx.DiGraph()
-        G.add_node("app.py:10", label="run", kind="function", file_path="app.py",
-                    signature="()", docstring="Run the app.")
-        G.add_node("app.py:42", label="setup", kind="function", file_path="app.py",
-                    signature="(config)", docstring="Setup.")
+        G.add_node(
+            "app.py:10",
+            label="run",
+            kind="function",
+            file_path="app.py",
+            signature="()",
+            docstring="Run the app.",
+        )
+        G.add_node(
+            "app.py:42",
+            label="setup",
+            kind="function",
+            file_path="app.py",
+            signature="(config)",
+            docstring="Setup.",
+        )
 
         from codeloom.query.embeddings import embed_nodes_streaming
 
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384, [0.2] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384, [0.2] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
             batches = list(embed_nodes_streaming(G, batch_size=32))
             assert len(batches) >= 1
             for batch_ids, batch_vecs, model_type in batches:
@@ -178,16 +225,31 @@ class TestEmbedNodesStreaming:
 
     def test_embed_nodes_skips_directories(self):
         G = nx.DiGraph()
-        G.add_node("dir:0", label="vendor", kind="directory", file_path="vendor")
-        G.add_node("app.py:10", label="run", kind="function", file_path="app.py",
-                    signature="()", docstring="Run the app.")
+        G.add_node(
+            "dir:0",
+            label="vendor",
+            kind="directory",
+            file_path="vendor",
+        )
+        G.add_node(
+            "app.py:10",
+            label="run",
+            kind="function",
+            file_path="app.py",
+            signature="()",
+            docstring="Run the app.",
+        )
 
         from codeloom.query.embeddings import embed_nodes_streaming
 
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
             batches = list(embed_nodes_streaming(G, batch_size=32))
             total_ids = set()
             for batch_ids, _, _ in batches:
@@ -198,6 +260,7 @@ class TestEmbedNodesStreaming:
     def test_embed_nodes_streaming_empty_graph(self):
         G = nx.DiGraph()
         from codeloom.query.embeddings import embed_nodes_streaming
+
         batches = list(embed_nodes_streaming(G, batch_size=32))
         assert len(batches) == 0
 
@@ -206,24 +269,46 @@ class TestEmbedStoreIntegration:
     def test_embed_and_store_round_trip(self, tmp_path):
         """Test that embeddings can be computed and stored."""
         G = nx.DiGraph()
-        G.add_node("app.py:10", label="run", kind="function", file_path="app.py",
-                    signature="()", docstring="Run the app.")
-        G.add_node("app.py:42", label="setup", kind="function", file_path="app.py",
-                    signature="(config)", docstring="Setup configuration.")
+        G.add_node(
+            "app.py:10",
+            label="run",
+            kind="function",
+            file_path="app.py",
+            signature="()",
+            docstring="Run the app.",
+        )
+        G.add_node(
+            "app.py:42",
+            label="setup",
+            kind="function",
+            file_path="app.py",
+            signature="(config)",
+            docstring="Setup configuration.",
+        )
 
         db_path = tmp_path / "test.db"
         from codeloom.storage.store import KnowledgeStore
+
         store = KnowledgeStore(str(db_path))
         store.save_graph(G)
 
         from codeloom.query.embeddings import embed_nodes_streaming
 
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * 384, [0.2] * 384], dtype=np.float32)
+        mock_model.encode.return_value = np.array(
+            [[0.1] * 384, [0.2] * 384], dtype=np.float32
+        )
 
-        with patch("codeloom.query.embeddings._get_model", return_value=mock_model):
-            for batch_ids, batch_vecs, model_type in embed_nodes_streaming(G, batch_size=32):
-                store.save_embeddings(dict(zip(batch_ids, batch_vecs)), model_type=model_type)
+        with patch(
+            "codeloom.query.embeddings._get_model", return_value=mock_model
+        ):
+            for batch_ids, batch_vecs, model_type in embed_nodes_streaming(
+                G, batch_size=32
+            ):
+                store.save_embeddings(
+                    dict(zip(batch_ids, batch_vecs)),
+                    model_type=model_type,
+                )
 
         # Verify embeddings by loading them back
         all_embeddings = store.load_embeddings()

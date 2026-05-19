@@ -90,8 +90,9 @@ def run_pipeline(
         max_file_size: Skip files larger than this.
         on_progress: Callback(stage: str, detail: str) for progress updates.
         incremental: Skip unchanged files (based on content hash).
-        lang: Language mode — "auto" (detect from text nodes), "en" (English-only
-            models), or "multilingual" (force multilingual text model).
+        lang: Language mode — "auto" (detect from text nodes), "en"
+            (English-only models), or "multilingual" (force multilingual
+            text model).
 
     Returns:
         PipelineResult with all intermediate and final results.
@@ -135,7 +136,10 @@ def run_pipeline(
 
     # Stage 2: Extract structures
     _start_stage("extract")
-    _progress("extract", f"Extracting from {len(result.detect_result.files)} files")
+    _progress(
+        "extract",
+        f"Extracting from {len(result.detect_result.files)} files",
+    )
 
     # Load previous file hashes for incremental build
     prev_hashes: dict[str, str] = {}
@@ -194,7 +198,8 @@ def run_pipeline(
         if existing.number_of_nodes() > 0:
             # Remove nodes from re-extracted files (they'll be replaced)
             nodes_to_remove = [
-                n for n, d in existing.nodes(data=True)
+                n
+                for n, d in existing.nodes(data=True)
                 if d.get("file_path", "") in re_extracted_files
             ]
             for n in nodes_to_remove:
@@ -211,7 +216,10 @@ def run_pipeline(
 
     # Stage 3.5: Git co-change enrichment
     _start_stage("git_cochange")
-    _progress("git_cochange", "Extracting co-change relationships from git history")
+    _progress(
+        "git_cochange",
+        "Extracting co-change relationships from git history",
+    )
     try:
         from codeloom.core.git_cochange import enrich_graph_with_cochange
 
@@ -251,13 +259,16 @@ def run_pipeline(
     _progress("resolve", "Resolving cross-file references")
     try:
         from codeloom.core.resolve import resolve_graph
+
         res = resolve_graph(result.graph)
         if res.resolved > 0:
-            _progress("resolve",
-                       f"Resolved {res.resolved} references to definitions")
+            _progress(
+                "resolve", f"Resolved {res.resolved} references to definitions"
+            )
         elif res.unresolved > 0:
-            _progress("resolve",
-                       f"{res.unresolved} references could not be resolved")
+            _progress(
+                "resolve", f"{res.unresolved} references could not be resolved"
+            )
         else:
             _progress("resolve", "All references already resolved")
     except Exception as e:
@@ -280,7 +291,10 @@ def run_pipeline(
 
             effective_text_model = TEXT_MODEL
 
-            _progress("embed", f"Dual-model: code={CODE_MODEL}, text={effective_text_model}")
+            _progress(
+                "embed",
+                f"Dual-model: code={CODE_MODEL}, text={effective_text_model}",
+            )
 
             # Incremental embedding: skip nodes that already have embeddings
             skip_ids: set[str] | None = None
@@ -288,12 +302,17 @@ def run_pipeline(
                 existing_ids = store.get_embedded_node_ids()
                 # Nodes from re-extracted files should NOT be skipped
                 nodes_from_changed = {
-                    n for n, d in result.graph.nodes(data=True)
+                    n
+                    for n, d in result.graph.nodes(data=True)
                     if d.get("file_path", "") in re_extracted_files
                 }
                 skip_ids = existing_ids - nodes_from_changed
                 if skip_ids:
-                    _progress("embed", f"Incremental: reusing {len(skip_ids)} existing embeddings")
+                    _progress(
+                        "embed",
+                        f"Incremental: reusing {len(skip_ids)}"
+                        " existing embeddings",
+                    )
 
             # Free incremental tracking sets — no longer needed
             del re_extracted_files
@@ -309,9 +328,13 @@ def run_pipeline(
                 skip_ids=skip_ids,
             ):
                 batch_dict = dict(zip(batch_ids, batch_vecs))
-                model_label = CODE_MODEL if model_type == "code" else effective_text_model
+                model_label = (
+                    CODE_MODEL if model_type == "code" else effective_text_model
+                )
                 store.save_embeddings(
-                    batch_dict, model_name=model_label, model_type=model_type,
+                    batch_dict,
+                    model_name=model_label,
+                    model_type=model_type,
                 )
                 all_embeddings.update(batch_dict)
                 del batch_dict  # free batch immediately after use
@@ -322,20 +345,25 @@ def run_pipeline(
                     text_count += len(batch_ids)
                 _progress(
                     "embed",
-                    f"Embedded {total_count} nodes (code:{code_count} text:{text_count})",
+                    f"Embedded {total_count} nodes"
+                    f" (code:{code_count} text:{text_count})",
                 )
 
             result.embeddings_count = total_count
             _progress(
                 "embed",
-                f"Generated {total_count} embeddings (code:{code_count} text:{text_count})",
+                f"Generated {total_count} embeddings"
+                f" (code:{code_count} text:{text_count})",
             )
 
             _progress("embed", "Computing edge weights")
             compute_edge_weights(result.graph, embeddings=all_embeddings)
             del all_embeddings
         except ImportError:
-            _progress("embed", "sentence-transformers not available, skipping embeddings")
+            _progress(
+                "embed",
+                "sentence-transformers not available, skipping embeddings",
+            )
             compute_edge_weights(result.graph)
         except Exception as e:
             _progress("embed", f"Embedding error: {e}")
@@ -347,8 +375,14 @@ def run_pipeline(
     # Stage 6: Cluster
     _start_stage("cluster")
     _progress("cluster", "Running hierarchical community detection")
-    result.cluster_result = hierarchical_cluster(result.graph, resolutions=resolutions)
-    _progress("cluster", f"Found {len(result.cluster_result.communities)} communities")
+    result.cluster_result = hierarchical_cluster(
+        result.graph,
+        resolutions=resolutions,
+    )
+    _progress(
+        "cluster",
+        f"Found {len(result.cluster_result.communities)} communities",
+    )
 
     # Annotate graph nodes with community IDs
     for node_id, comm_ids in result.cluster_result.node_to_community.items():
@@ -357,6 +391,7 @@ def run_pipeline(
 
     # Generate community summaries for search indexing
     from codeloom.core.cluster import summarize_communities
+
     summarize_communities(result.graph, result.cluster_result)
     _end_stage("cluster")
     _progress("cluster", "Community summaries generated")
@@ -396,11 +431,13 @@ def run_pipeline(
     # Clear search and query embedding caches after rebuild (stale results)
     try:
         from codeloom.query.hybrid import clear_search_cache
+
         clear_search_cache()
     except ImportError:
         pass
     try:
         from codeloom.query.embeddings import clear_query_cache
+
         clear_query_cache()
     except ImportError:
         pass

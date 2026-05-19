@@ -55,14 +55,31 @@ for lang, exts in LANGUAGE_MAP.items():
         EXT_TO_LANG[ext] = lang
 
 DEFAULT_IGNORE = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
-    ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
-    ".eggs", "*.egg-info", ".DS_Store", ".codeloom",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".eggs",
+    "*.egg-info",
+    ".DS_Store",
+    ".codeloom",
 }
 
 SENSITIVE_PATTERNS = {
-    "*.env", "*.pem", "*.key", "*.secret", "*credentials*",
-    "*password*", "*.p12", "*.pfx",
+    "*.env",
+    "*.pem",
+    "*.key",
+    "*.secret",
+    "*credentials*",
+    "*password*",
+    "*.p12",
+    "*.pfx",
 }
 
 
@@ -87,7 +104,8 @@ def _load_gitignore_spec(root: Path) -> pathspec.PathSpec | None:
     if not gitignore.exists():
         return None
     try:
-        lines = gitignore.read_text(encoding="utf-8", errors="replace").splitlines()
+        raw = gitignore.read_text(encoding="utf-8", errors="replace")
+        lines = raw.splitlines()
         return pathspec.PathSpec.from_lines("gitwildmatch", lines)
     except Exception:
         return None
@@ -99,7 +117,8 @@ def _load_codeloom_ignore_spec(root: Path) -> pathspec.PathSpec | None:
     if not ignore_file.exists():
         return None
     try:
-        lines = ignore_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        raw = ignore_file.read_text(encoding="utf-8", errors="replace")
+        lines = raw.splitlines()
         return pathspec.PathSpec.from_lines("gitwildmatch", lines)
     except Exception:
         return None
@@ -128,8 +147,18 @@ def _classify_file(path: Path) -> str:
         return "code"
     if ext in {".md", ".mdx", ".rst", ".txt"}:
         return "doc"
-    if ext in {".pdf", ".html", ".htm", ".csv", ".tsv",
-               ".docx", ".xlsx", ".odt", ".ods", ".odp"}:
+    if ext in {
+        ".pdf",
+        ".html",
+        ".htm",
+        ".csv",
+        ".tsv",
+        ".docx",
+        ".xlsx",
+        ".odt",
+        ".ods",
+        ".odp",
+    }:
         return "doc"
     if ext in {".json", ".yaml", ".yml", ".toml", ".ini", ".cfg"}:
         return "config"
@@ -176,7 +205,8 @@ def detect(
             result.skipped.append(f"ignored: {path}")
             continue
 
-        # 2. Check .gitignore patterns (full gitignore spec with negation support)
+        # 2. Check .gitignore patterns (full gitignore spec with
+        #    negation support)
         rel_path = str(path.relative_to(root))
         if gitignore_spec and gitignore_spec.match_file(rel_path):
             result.skipped.append(f"gitignored: {path}")
@@ -213,11 +243,13 @@ def detect(
             result.skipped.append(f"unsupported: {path}")
             continue
 
-        result.files.append(DetectedFile(
-            path=path,
-            language=lang,
-            file_type=file_type,
-            size_bytes=size,
-        ))
+        result.files.append(
+            DetectedFile(
+                path=path,
+                language=lang,
+                file_type=file_type,
+                size_bytes=size,
+            )
+        )
 
     return result

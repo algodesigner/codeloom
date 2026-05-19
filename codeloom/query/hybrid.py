@@ -27,68 +27,192 @@ if TYPE_CHECKING:
 
 
 # Stopwords for keyword search noise removal
-STOPWORDS: frozenset[str] = frozenset({
-    "the", "is", "at", "which", "on", "a", "an", "and", "or", "but",
-    "in", "with", "to", "for", "of", "not", "no", "can", "had", "has",
-    "have", "was", "were", "been", "being", "do", "does", "did", "will",
-    "would", "could", "should", "may", "might", "shall", "must", "need",
-    "this", "that", "these", "those", "it", "its", "from", "by", "as",
-    "are", "be", "if", "so", "than", "too", "very", "just", "about",
-    "into", "through", "during", "before", "after", "above", "below",
-    "between", "out", "off", "over", "under", "again", "then", "once",
-    "here", "there", "when", "where", "why", "how", "all", "each",
-    "every", "both", "few", "more", "most", "other", "some", "such",
-    "only", "own", "same", "also", "what", "who", "whom",
-})
+STOPWORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "is",
+        "at",
+        "which",
+        "on",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "with",
+        "to",
+        "for",
+        "of",
+        "not",
+        "no",
+        "can",
+        "had",
+        "has",
+        "have",
+        "was",
+        "were",
+        "been",
+        "being",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "must",
+        "need",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "from",
+        "by",
+        "as",
+        "are",
+        "be",
+        "if",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "about",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "only",
+        "own",
+        "same",
+        "also",
+        "what",
+        "who",
+        "whom",
+    }
+)
 
 # Multiplier applied to test files when penalty is active.
 # 0.0 = all tests excluded; 1.0 = no penalty.
 TEST_PENALTY_FACTOR = 0.3
 
 # Path components that identify test directories.
-_TEST_DIRS = frozenset({
-    "test", "tests", "spec", "specs", "tst", "__tests__",
-})
+_TEST_DIRS = frozenset(
+    {
+        "test",
+        "tests",
+        "spec",
+        "specs",
+        "tst",
+        "__tests__",
+    }
+)
 
 # Additional directory names that clearly indicate test code.
-_TEST_DIR_PREFIXES = frozenset({
-    "testing", "testdata", "testutils", "testhelpers", "testfixtures",
-    "testharness", "testdriver", "testsuite",
-})
+_TEST_DIR_PREFIXES = frozenset(
+    {
+        "testing",
+        "testdata",
+        "testutils",
+        "testhelpers",
+        "testfixtures",
+        "testharness",
+        "testdriver",
+        "testsuite",
+    }
+)
 
 # Directories ending in "test" that are common in test code bases.
 # Does NOT include common English words (protest, contest, detest, etc.).
-_TEST_DIR_SUFFIXES = frozenset({
-    "mytest", "unittest", "integrationtest", "unittests",
-})
+_TEST_DIR_SUFFIXES = frozenset(
+    {
+        "mytest",
+        "unittest",
+        "integrationtest",
+        "unittests",
+    }
+)
 
 # Common directory names that should NOT be treated as test dirs
 # despite starting with "test".
-_TEST_DIR_FALSE_POSITIVES = frozenset({
-    "testimonial", "testament", "testify", "testimony",
-})
+_TEST_DIR_FALSE_POSITIVES = frozenset(
+    {
+        "testimonial",
+        "testament",
+        "testify",
+        "testimony",
+    }
+)
 
 # Filename patterns for test files (case-insensitive match).
 # Patterns use fnmatch; explicit extensions prevent false positives
 # like "protest.py" matching "*Test.*".
-_TEST_NAME_PATTERNS = frozenset({
-    # Python
-    "test_*.py", "*_test.py",
-    # JavaScript / TypeScript
-    "*.test.js", "*.test.ts", "*.test.jsx", "*.test.tsx",
-    "*.spec.js", "*.spec.ts", "*.spec.jsx", "*.spec.tsx",
-    "*.test", "*.spec",
-    # Java
-    "*Test.java", "*Tests.java", "*IT.java", "*Spec.java",
-    # Go
-    "*_test.go",
-    # Rust
-    "*_test.rs",
-    # C# / .NET
-    "*Tests.cs", "*Test.cs",
-    # Ruby
-    "*_spec.rb", "*_test.rb",
-})
+_TEST_NAME_PATTERNS = frozenset(
+    {
+        # Python
+        "test_*.py",
+        "*_test.py",
+        # JavaScript / TypeScript
+        "*.test.js",
+        "*.test.ts",
+        "*.test.jsx",
+        "*.test.tsx",
+        "*.spec.js",
+        "*.spec.ts",
+        "*.spec.jsx",
+        "*.spec.tsx",
+        "*.test",
+        "*.spec",
+        # Java
+        "*Test.java",
+        "*Tests.java",
+        "*IT.java",
+        "*Spec.java",
+        # Go
+        "*_test.go",
+        # Rust
+        "*_test.rs",
+        # C# / .NET
+        "*Tests.cs",
+        "*Test.cs",
+        # Ruby
+        "*_spec.rb",
+        "*_test.rb",
+    }
+)
 
 # Maven/Java src/test/java convention — path prefix.
 _SRC_TEST_PREFIXES = ("src/test/", "src\\test\\")
@@ -96,9 +220,11 @@ _SRC_TEST_PREFIXES = ("src/test/", "src\\test\\")
 
 # Data classes
 
+
 @dataclass
 class SearchResult:
     """Individual search result node."""
+
     node_id: str
     label: str
     kind: str
@@ -116,6 +242,7 @@ class SearchResult:
 @dataclass
 class SearchEdge:
     """Edge in the subgraph (on a shortest path)."""
+
     source: str
     target: str
     relation: str
@@ -128,6 +255,7 @@ class SearchGraph:
     Seed nodes + path nodes (MST intermediates) + edges (MST paths only).
     Isolated seeds (unreachable from other seeds) go in isolated.
     """
+
     nodes: list[SearchResult]
     edges: list[SearchEdge]
     isolated: list[SearchResult] = field(default_factory=list)
@@ -143,10 +271,11 @@ class SearchGraph:
             node_a -relation-> node_b
             node_b -relation-> node_c
         """
+
         def _s(node_id: str) -> str:
             """Strip source_dir prefix to get relative path."""
             if source_dir and node_id.startswith(source_dir):
-                return node_id[len(source_dir):]
+                return node_id[len(source_dir) :]
             return node_id
 
         seed_ids = []
@@ -183,9 +312,10 @@ class SearchGraph:
                 "hint": "..."
             }
         """
+
         def _s(node_id: str) -> str:
             if source_dir and node_id.startswith(source_dir):
-                return node_id[len(source_dir):]
+                return node_id[len(source_dir) :]
             return node_id
 
         seeds = []
@@ -221,17 +351,31 @@ class SearchGraph:
         ]
 
         hint_val = self.hint if self.hint else None
-        return {"seeds": seeds, "edges": edges, "isolated": isolated, "hint": hint_val}
+        return {
+            "seeds": seeds,
+            "edges": edges,
+            "isolated": isolated,
+            "hint": hint_val,
+        }
+
 
 _search_cache: OrderedDict[str, SearchGraph] = OrderedDict()
 _CACHE_MAX_SIZE = 128
 
 
 # Valid values for --kind filter
-VALID_KINDS = frozenset({
-    "function", "class", "method", "interface", "enum",
-    "struct", "trait", "section",
-})
+VALID_KINDS = frozenset(
+    {
+        "function",
+        "class",
+        "method",
+        "interface",
+        "enum",
+        "struct",
+        "trait",
+        "section",
+    }
+)
 
 
 def _generate_filter_hint(
@@ -253,6 +397,7 @@ def _generate_filter_hint(
         return ""
 
     from collections import Counter
+
     kind_counts: Counter = Counter()
     for _, _, data in seed_nodes:
         kind = data.get("kind", "unknown")
@@ -273,7 +418,9 @@ def _generate_filter_hint(
 
 
 def _cache_key(
-    query: str, top_k: int, *,
+    query: str,
+    top_k: int,
+    *,
     penalise_tests: bool = True,
     snippet_count: int = 0,
     kind: str | None = None,
@@ -285,7 +432,10 @@ def _cache_key(
     filters, test-penalty settings, and snippet preferences don't share
     a stale cache entry.
     """
-    raw = f"{query}|{top_k}|{penalise_tests}|{snippet_count}|{kind}|{file_pattern}"
+    raw = (
+        f"{query}|{top_k}|{penalise_tests}"
+        f"|{snippet_count}|{kind}|{file_pattern}"
+    )
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -294,7 +444,8 @@ def clear_search_cache() -> None:
     _search_cache.clear()
 
 
-# Signal settings (5 signals: code_vector, text_vector, graph, keyword, community)
+# Signal settings (5 signals: code_vector, text_vector, graph, keyword,
+# community)
 
 SIGNAL_NAMES = ["code_vector", "text_vector", "graph", "keyword", "community"]
 
@@ -319,7 +470,7 @@ def reciprocal_rank_fusion(
     if weights is None:
         weights = [1.0] * len(ranked_lists)
     if signal_names is None:
-        signal_names = SIGNAL_NAMES[:len(ranked_lists)]
+        signal_names = SIGNAL_NAMES[: len(ranked_lists)]
 
     scores: dict[str, float] = {}
     breakdowns: dict[str, dict[str, float]] = {}
@@ -329,7 +480,9 @@ def reciprocal_rank_fusion(
             scores[item_id] = scores.get(item_id, 0) + contribution
             if item_id not in breakdowns:
                 breakdowns[item_id] = {}
-            breakdowns[item_id][sname] = breakdowns[item_id].get(sname, 0) + contribution
+            breakdowns[item_id][sname] = (
+                breakdowns[item_id].get(sname, 0) + contribution
+            )
 
     fused = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     return fused, breakdowns
@@ -341,7 +494,8 @@ def _is_test_file(file_path: str) -> bool:
     Checks (in order):
     1. Path contains a test directory component (test/, tests/, spec/, etc.)
     2. File in Maven/Gradle src/test/java or similar
-    3. Filename matches a test-naming convention (*Test.java, test_*.py, *.spec.ts, etc.)
+     3. Filename matches a test-naming convention (*Test.java, test_*.py,
+        *.spec.ts, etc.)
     """
     from fnmatch import fnmatch
 
@@ -367,7 +521,13 @@ def _is_test_file(file_path: str) -> bool:
                     return True
             if lower.endswith("test") and len(lower) > 4:
                 prefix = lower[:-4]
-                if prefix in ("integration", "unit", "e2e", "smoke", "regression"):
+                if prefix in (
+                    "integration",
+                    "unit",
+                    "e2e",
+                    "smoke",
+                    "regression",
+                ):
                     return True
 
     # 2. src/test/ prefix (Maven / Gradle convention)
@@ -428,8 +588,9 @@ def _generate_source_test_hint(
         )
 
 
-def _read_snippet(file_path: str, start_line: int, end_line: int = 0,
-                  max_lines: int = 5) -> str | None:
+def _read_snippet(
+    file_path: str, start_line: int, end_line: int = 0, max_lines: int = 5
+) -> str | None:
     """Read a few lines of source code starting from start_line.
 
     Returns at most max_lines lines (fewer if end_line is reached first).
@@ -458,12 +619,14 @@ def _read_snippet(file_path: str, start_line: int, end_line: int = 0,
 def extract_search_terms(query: str) -> list[str]:
     """Extract search terms by removing stopwords and short tokens."""
     return [
-        t.lower() for t in query.split()
+        t.lower()
+        for t in query.split()
         if len(t) > 2 and t.lower() not in STOPWORDS
     ]
 
 
 # Shortest-path subgraph
+
 
 def _build_seed_subtree(
     G: nx.DiGraph,
@@ -577,6 +740,7 @@ def _build_seed_subtree(
 
 # Graph expansion helper
 
+
 def _expand_from_seeds(
     G: nx.DiGraph,
     seed_ids: list[str],
@@ -623,6 +787,7 @@ def _expand_from_seeds(
 
 # Main search function
 
+
 def hybrid_search(
     query: str,
     store: "KnowledgeStore",
@@ -648,7 +813,8 @@ def hybrid_search(
         G: Code graph.
         top_k: Number of seed nodes in response.
         vector_candidates: Number of candidates per signal.
-        weights: Signal weights [code_vector, text_vector, graph, keyword, community].
+        weights: Signal weights [code_vector, text_vector, graph,
+            keyword, community].
         use_cache: Use LRU cache.
         fast: Use text model only (faster cold start).
         text_model: Text model name override.
@@ -656,8 +822,10 @@ def hybrid_search(
         kind: Filter by symbol kind (function, class, method, interface,"
             " enum, struct, trait, section).
         file_pattern: Filter by file path glob (e.g. "src/auth/*").
-        penalise_tests: Demote test files in ranking by TEST_PENALTY_FACTOR (default True).
-        snippet_count: Number of top seed results to annotate with source snippets (0 = none).
+        penalise_tests: Demote test files in ranking by
+            TEST_PENALTY_FACTOR (default True).
+        snippet_count: Number of top seed results to annotate with
+            source snippets (0 = none).
 
     Returns:
         SearchGraph containing seed nodes, path nodes, and edges.
@@ -665,7 +833,8 @@ def hybrid_search(
     # Stage 1: Cache check
     if use_cache:
         key = _cache_key(
-            query, top_k,
+            query,
+            top_k,
             penalise_tests=penalise_tests,
             snippet_count=snippet_count,
             kind=kind,
@@ -681,30 +850,51 @@ def hybrid_search(
     # Stage 2: Vector search (dual-model) — signals 1 and 2
     if fast:
         from codeloom.query.embeddings import TEXT_MODEL, embed_query
+
         effective_text = text_model or TEXT_MODEL
         query_vec = embed_query(query, effective_text)
         code_vector_hits = store.vector_search(
-            query_vec, top_k=vector_candidates, model_type="code",
+            query_vec,
+            top_k=vector_candidates,
+            model_type="code",
         )
         text_vector_hits = store.vector_search(
-            query_vec, top_k=vector_candidates, model_type="text",
+            query_vec,
+            top_k=vector_candidates,
+            model_type="text",
         )
     else:
         from codeloom.query.embeddings import embed_query_dual
+
         query_vecs = embed_query_dual(query, text_model=text_model)
         code_vector_hits = store.vector_search(
-            query_vecs["code"], top_k=vector_candidates, model_type="code",
+            query_vecs["code"],
+            top_k=vector_candidates,
+            model_type="code",
         )
         text_vector_hits = store.vector_search(
-            query_vecs["text"], top_k=vector_candidates, model_type="text",
+            query_vecs["text"],
+            top_k=vector_candidates,
+            model_type="text",
         )
 
     # Stage 3: Graph expansion from vector seeds — signal 3
-    vector_seeds = [nid for nid, _ in (code_vector_hits + text_vector_hits)[:20]]
-    graph_hits = _expand_from_seeds(G, vector_seeds, hops=graph_hops, max_nodes=vector_candidates)
+    vector_seeds = [
+        nid for nid, _ in (code_vector_hits + text_vector_hits)[:20]
+    ]
+    graph_hits = _expand_from_seeds(
+        G,
+        vector_seeds,
+        hops=graph_hops,
+        max_nodes=vector_candidates,
+    )
 
     # Stage 4: Keyword search (FTS5) — signal 4
-    keyword_results = store.keyword_search(top_terms, top_k=vector_candidates) if top_terms else []
+    keyword_results = (
+        store.keyword_search(top_terms, top_k=vector_candidates)
+        if top_terms
+        else []
+    )
     keyword_hits = [(r["id"], r["score"]) for r in keyword_results]
 
     # Stage 5: Community search — signal 5
@@ -719,8 +909,11 @@ def hybrid_search(
 
     # Stage 6: 5-signal RRF fusion
     fused, breakdowns = reciprocal_rank_fusion(
-        code_vector_hits, text_vector_hits, graph_hits,
-        keyword_hits, community_hits,
+        code_vector_hits,
+        text_vector_hits,
+        graph_hits,
+        keyword_hits,
+        community_hits,
         weights=signal_weights,
         signal_names=SIGNAL_NAMES,
     )
@@ -771,15 +964,18 @@ def hybrid_search(
 
     # Stage 8: MST-based subgraph construction
     seed_ids = [nid for nid, _, _ in seed_nodes]
-    intermediate_ids, path_edges, isolated_ids = _build_seed_subtree(G, seed_ids)
+    intermediate_ids, path_edges, isolated_ids = _build_seed_subtree(
+        G, seed_ids
+    )
     isolated_set = set(isolated_ids)
 
     # Stage 9: Build SearchGraph
     nodes: list[SearchResult] = []
     isolated_nodes: list[SearchResult] = []
 
-    def _make_result(node_id: str, score: float, data: dict,
-                     source: str) -> SearchResult:
+    def _make_result(
+        node_id: str, score: float, data: dict, source: str
+    ) -> SearchResult:
         return SearchResult(
             node_id=node_id,
             label=data.get("label", node_id),
@@ -816,17 +1012,27 @@ def hybrid_search(
             if count >= snippet_count:
                 break
             if node.source == "seed":
-                node.context_snippet = _read_snippet(
-                    node.file_path, node.start_line, node.end_line,
-                ) or ""
+                node.context_snippet = (
+                    _read_snippet(
+                        node.file_path,
+                        node.start_line,
+                        node.end_line,
+                    )
+                    or ""
+                )
                 count += 1
         for node in result.isolated:
             if count >= snippet_count:
                 break
             if node.source == "seed":
-                node.context_snippet = _read_snippet(
-                    node.file_path, node.start_line, node.end_line,
-                ) or ""
+                node.context_snippet = (
+                    _read_snippet(
+                        node.file_path,
+                        node.start_line,
+                        node.end_line,
+                    )
+                    or ""
+                )
                 count += 1
 
     # Generate filter hint
@@ -843,7 +1049,8 @@ def hybrid_search(
     # Cache result
     if use_cache:
         key = _cache_key(
-            query, top_k,
+            query,
+            top_k,
             penalise_tests=penalise_tests,
             snippet_count=snippet_count,
             kind=kind,
@@ -870,11 +1077,13 @@ def extract_result_edges(
         for e in results.edges:
             src_label = G.nodes.get(e.source, {}).get("label", e.source)
             tgt_label = G.nodes.get(e.target, {}).get("label", e.target)
-            edges.append({
-                "from": src_label,
-                "to": tgt_label,
-                "rel": e.relation,
-            })
+            edges.append(
+                {
+                    "from": src_label,
+                    "to": tgt_label,
+                    "rel": e.relation,
+                }
+            )
         return edges
 
     # Legacy: list[SearchResult]
@@ -892,9 +1101,11 @@ def extract_result_edges(
                 key = (nid, target)
                 if key not in seen:
                     seen.add(key)
-                    edges.append({
-                        "from": G.nodes[nid].get("label", nid),
-                        "to": G.nodes[target].get("label", target),
-                        "rel": edata.get("relation", ""),
-                    })
+                    edges.append(
+                        {
+                            "from": G.nodes[nid].get("label", nid),
+                            "to": G.nodes[target].get("label", target),
+                            "rel": edata.get("relation", ""),
+                        }
+                    )
     return edges

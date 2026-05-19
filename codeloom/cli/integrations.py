@@ -30,7 +30,8 @@ def claude_group():
     "--scope",
     type=click.Choice(["user", "project"], case_sensitive=False),
     default=None,
-    help="Install scope: 'user' (global ~/.claude/skills/) or 'project' (.claude/skills/). "
+    help="Install scope: 'user' (global ~/.claude/skills/) or "
+    "'project' (.claude/skills/). "
     "If omitted, you will be prompted to choose.",
 )
 def claude_install(scope: str | None):
@@ -81,19 +82,27 @@ def claude_install(scope: str | None):
         "\n## codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to Grep if the code graph has no results.\n"
-        "- When you know what kind of symbol you need, add `--kind` to your search: "
-        "`codeloom search \\\"query\\\" --kind function` filters to functions only. "
-        "Valid kinds: function, class, method, interface, enum, struct, trait, section.\n"
-        "- When you know where the code lives, add `--file` with a glob pattern: "
-        "`codeloom search \\\"query\\\" --file \\\"src/auth/*\\\"`.\n"
+        "- When you know what kind of symbol you need, add `--kind` to your "
+        "search: "
+        '`codeloom search \\"query\\" --kind function` filters to functions '
+        "only. "
+        "Valid kinds: function, class, method, interface, enum, "
+        "struct, trait, section.\n"
+        "- When you know where the code lives, add `--file` with a glob "
+        "pattern: "
+        '`codeloom search \\"query\\" --file \\"src/auth/*\\"`.\n'
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density)\n"
@@ -162,7 +171,8 @@ def claude_install(scope: str | None):
     }
     stop_hooks = hooks.setdefault("Stop", [])
     stop_already = any(
-        "codeloom" in json.dumps(h) or "auto_rebuild" in json.dumps(h) for h in stop_hooks
+        "codeloom" in json.dumps(h) or "auto_rebuild" in json.dumps(h)
+        for h in stop_hooks
     )
     if stop_already:
         human_skip("Stop hook (auto-rebuild) already exists")
@@ -212,7 +222,11 @@ def claude_uninstall(scope: str):
             if line.strip() == "## codeloom":
                 skip = True
                 continue
-            if skip and line.startswith("##") and "codeloom" not in line.lower():
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
                 skip = False
             if skip:
                 continue
@@ -231,7 +245,10 @@ def claude_uninstall(scope: str):
             hooks[event] = [
                 h
                 for h in event_hooks
-                if "codeloom" not in json.dumps(h) and "auto_rebuild" not in json.dumps(h)
+                if (
+                    "codeloom" not in json.dumps(h)
+                    and "auto_rebuild" not in json.dumps(h)
+                )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
@@ -267,14 +284,18 @@ def codex_install():
         "\n## codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to grep if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density)\n"
@@ -372,7 +393,11 @@ def codex_uninstall():
             if line.strip() == "## codeloom":
                 skip = True
                 continue
-            if skip and line.startswith("##") and "codeloom" not in line.lower():
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
                 skip = False
             if skip:
                 continue
@@ -391,7 +416,10 @@ def codex_uninstall():
             hooks[event] = [
                 h
                 for h in event_hooks
-                if "codeloom" not in json.dumps(h) and "auto_rebuild" not in json.dumps(h)
+                if (
+                    "codeloom" not in json.dumps(h)
+                    and "auto_rebuild" not in json.dumps(h)
+                )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
@@ -414,7 +442,8 @@ def gemini_group():
 
 @gemini_group.command(name="install")
 def gemini_install():
-    """Install per-project Gemini CLI integration (GEMINI.md + BeforeTool hook)."""
+    """Install per-project Gemini CLI integration (GEMINI.md + BeforeTool
+    hook)."""
     import json
 
     human_header("Installing codeloom for Gemini CLI...")
@@ -427,14 +456,18 @@ def gemini_install():
         "\n## codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before reading raw files, you MUST run `codeloom search` first. "
         "Only fall back to file reads if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density)\n"
@@ -467,7 +500,8 @@ def gemini_install():
                     '"codeloom: code graph available. '
                     'Use `codeloom search \\"<query>\\"` (5-signal HybridRAG) '
                     "instead of reading raw files. This single command covers "
-                    "vector, graph, keyword, and community search with RRF fusion."
+                    "vector, graph, keyword, and community search with RRF "
+                    "fusion."
                     "\"}}' || true"
                 ),
             }
@@ -501,7 +535,9 @@ def gemini_install():
         ],
     }
     session_hooks = hooks.setdefault("SessionEnd", [])
-    session_already = any("auto_rebuild" in json.dumps(h) for h in session_hooks)
+    session_already = any(
+        "auto_rebuild" in json.dumps(h) for h in session_hooks
+    )
     if session_already:
         human_skip("SessionEnd hook (auto-rebuild) already exists")
     else:
@@ -531,7 +567,11 @@ def gemini_uninstall():
             if line.strip() == "## codeloom":
                 skip = True
                 continue
-            if skip and line.startswith("##") and "codeloom" not in line.lower():
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
                 skip = False
             if skip:
                 continue
@@ -550,7 +590,10 @@ def gemini_uninstall():
             hooks[event] = [
                 h
                 for h in event_hooks
-                if "codeloom" not in json.dumps(h) and "auto_rebuild" not in json.dumps(h)
+                if (
+                    "codeloom" not in json.dumps(h)
+                    and "auto_rebuild" not in json.dumps(h)
+                )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
@@ -590,14 +633,18 @@ def cursor_install():
         "# codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to grep/find if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density).\n"
@@ -644,7 +691,8 @@ def windsurf_group():
 
 @windsurf_group.command(name="install")
 def windsurf_install():
-    """Install per-project Windsurf integration (.windsurf/rules/codeloom.md)."""
+    """Install per-project Windsurf integration
+    (.windsurf/rules/codeloom.md)."""
     human_header("Installing codeloom for Windsurf IDE...")
     project_root = Path.cwd()
 
@@ -656,14 +704,18 @@ def windsurf_install():
         "# codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to grep/find if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density).\n"
@@ -720,14 +772,18 @@ def cline_install():
         "# codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to grep/find if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density).\n"
@@ -797,7 +853,8 @@ def aider_group():
 
 @aider_group.command(name="install")
 def aider_install():
-    """Install per-project Aider integration (CONVENTIONS.md + .aider.conf.yml)."""
+    """Install per-project Aider integration (CONVENTIONS.md +
+    .aider.conf.yml)."""
     import yaml
 
     human_header("Installing codeloom for Aider CLI...")
@@ -810,14 +867,18 @@ def aider_install():
         "\n## codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search method.** '
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → RRF fusion) "
-        "in a single call — do not run separate community or keyword searches.\n"
+        '- **You MUST use `codeloom search "<query>"` as the primary search '
+        "method.** "
+        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
+        "RRF fusion) "
+        "in a single call — do not run separate community or keyword "
+        "searches.\n"
         "- Before grepping raw files, you MUST run `codeloom search` first. "
         "Only fall back to grep/find if the code graph has no results.\n"
         "- After modifying code files, run "
         "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you need to "
+        "- Use `codeloom communities` (without `--search`) only when you "
+        "need to "
         "list or browse the community structure, not as a search substitute.\n"
         "- Use `codeloom stats` for structural overview "
         "(god nodes, communities, density).\n"
@@ -873,7 +934,11 @@ def aider_uninstall():
             if line.strip() == "## codeloom":
                 skip = True
                 continue
-            if skip and line.startswith("##") and "codeloom" not in line.lower():
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
                 skip = False
             if skip:
                 continue
@@ -904,7 +969,7 @@ def aider_uninstall():
     human_done("codeloom integration removed.")
 
 
-# ─── OpenCode ──────────────────────────────────────────────────────────────────
+# ─── OpenCode ───────────────────────────────────────────────────────────
 
 
 @click.group(name="opencode")
@@ -939,7 +1004,8 @@ def opencode_install(scope: str | None):
             "Where should codeloom be installed?",
             ["user", "project"],
             descriptions=[
-                "Global (~/.config/opencode/skills/) — available in ALL projects",
+                "Global (~/.config/opencode/skills/) — "
+                "available in ALL projects",
                 "Local (.opencode/skills/) — available only in THIS project",
             ],
             default=1,
@@ -1000,7 +1066,9 @@ def opencode_install(scope: str | None):
             "  }"
         )
 
-    human_done("Done! OpenCode will discover the skill and MCP tools automatically.")
+    human_done(
+        "Done! OpenCode will discover the skill and MCP tools automatically."
+    )
 
 
 @opencode_group.command(name="uninstall")

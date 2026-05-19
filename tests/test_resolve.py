@@ -18,6 +18,7 @@ from codeloom.core.resolve import (
 # Unit tests: helpers
 # ---------------------------------------------------------------------------
 
+
 class TestParseLine:
     def test_parses_simple(self):
         assert _parse_line("main.py:42") == 42
@@ -54,6 +55,7 @@ class TestExtractFilePath:
 # Unit tests: spatial index
 # ---------------------------------------------------------------------------
 
+
 class TestBuildSpatialIndex:
     def test_empty_graph(self):
         G = nx.DiGraph()
@@ -62,8 +64,14 @@ class TestBuildSpatialIndex:
 
     def test_single_definition(self):
         G = nx.DiGraph()
-        G.add_node("app.py:10", kind="function", file_path="app.py",
-                    label="run", start_line=10, end_line=25)
+        G.add_node(
+            "app.py:10",
+            kind="function",
+            file_path="app.py",
+            label="run",
+            start_line=10,
+            end_line=25,
+        )
         index = build_spatial_index(G)
         assert "app.py" in index
         assert len(index["app.py"]) == 1
@@ -72,12 +80,30 @@ class TestBuildSpatialIndex:
 
     def test_multiple_definitions_in_file(self):
         G = nx.DiGraph()
-        G.add_node("app.py:1", kind="class", file_path="app.py",
-                    label="App", start_line=1, end_line=50)
-        G.add_node("app.py:10", kind="method", file_path="app.py",
-                    label="run", start_line=10, end_line=25)
-        G.add_node("app.py:30", kind="method", file_path="app.py",
-                    label="setup", start_line=30, end_line=45)
+        G.add_node(
+            "app.py:1",
+            kind="class",
+            file_path="app.py",
+            label="App",
+            start_line=1,
+            end_line=50,
+        )
+        G.add_node(
+            "app.py:10",
+            kind="method",
+            file_path="app.py",
+            label="run",
+            start_line=10,
+            end_line=25,
+        )
+        G.add_node(
+            "app.py:30",
+            kind="method",
+            file_path="app.py",
+            label="setup",
+            start_line=30,
+            end_line=45,
+        )
         index = build_spatial_index(G)
         assert len(index["app.py"]) == 3
         # Should be sorted by start_line
@@ -87,24 +113,41 @@ class TestBuildSpatialIndex:
 
     def test_skips_non_definition_kinds(self):
         G = nx.DiGraph()
-        G.add_node("app.py:5", kind="import", file_path="app.py",
-                    label="os", start_line=5)
+        G.add_node(
+            "app.py:5",
+            kind="import",
+            file_path="app.py",
+            label="os",
+            start_line=5,
+        )
         index = build_spatial_index(G)
         # "import" is not in DEFINITION_KINDS
         assert "app.py" not in index or len(index["app.py"]) == 0
 
     def test_skips_nodes_without_file_path(self):
         G = nx.DiGraph()
-        G.add_node("node:1", kind="function", file_path="", label="f", start_line=1)
+        G.add_node(
+            "node:1", kind="function", file_path="", label="f", start_line=1
+        )
         index = build_spatial_index(G)
         assert index == {}
 
     def test_definitions_across_multiple_files(self):
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py",
-                    label="fn_a", start_line=1)
-        G.add_node("b.py:5", kind="function", file_path="b.py",
-                    label="fn_b", start_line=5)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="fn_a",
+            start_line=1,
+        )
+        G.add_node(
+            "b.py:5",
+            kind="function",
+            file_path="b.py",
+            label="fn_b",
+            start_line=5,
+        )
         index = build_spatial_index(G)
         assert "a.py" in index
         assert "b.py" in index
@@ -113,10 +156,16 @@ class TestBuildSpatialIndex:
 
     def test_includes_definition_kinds_only(self):
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py",
-                    label="fn", start_line=1)
-        G.add_node("a.py:5", kind="variable", file_path="a.py",
-                    label="x", start_line=5)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=1,
+        )
+        G.add_node(
+            "a.py:5", kind="variable", file_path="a.py", label="x", start_line=5
+        )
         index = build_spatial_index(G)
         assert len(index["a.py"]) == 2  # Both are in DEFINITION_KINDS
 
@@ -124,6 +173,7 @@ class TestBuildSpatialIndex:
 # ---------------------------------------------------------------------------
 # Unit tests: containing definition lookup
 # ---------------------------------------------------------------------------
+
 
 class TestFindContainingDefinition:
     def _spans(self):
@@ -205,6 +255,7 @@ class TestFindContainingDefinition:
 # Integration tests: resolve_graph
 # ---------------------------------------------------------------------------
 
+
 class TestResolveGraph:
     def test_empty_graph(self):
         G = nx.DiGraph()
@@ -215,10 +266,22 @@ class TestResolveGraph:
 
     def test_edge_already_pointing_to_definition(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="caller", start_line=5, end_line=10)
-        G.add_node("b.py:15", kind="function", file_path="b.py",
-                    label="callee", start_line=15, end_line=20)
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="caller",
+            start_line=5,
+            end_line=10,
+        )
+        G.add_node(
+            "b.py:15",
+            kind="function",
+            file_path="b.py",
+            label="callee",
+            start_line=15,
+            end_line=20,
+        )
         G.add_edge("a.py:5", "b.py:15", relation="calls")
         result = resolve_graph(G)
         assert result.already_resolved == 1
@@ -228,11 +291,23 @@ class TestResolveGraph:
 
     def test_resolves_edge_to_containing_definition(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="caller", start_line=5, end_line=10)
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="caller",
+            start_line=5,
+            end_line=10,
+        )
         # Target is a specific line inside a larger function
-        G.add_node("b.py:15", kind="function", file_path="b.py",
-                    label="callee", start_line=15, end_line=30)
+        G.add_node(
+            "b.py:15",
+            kind="function",
+            file_path="b.py",
+            label="callee",
+            start_line=15,
+            end_line=30,
+        )
         # Edge points to line 20 (inside callee)
         G.add_edge("a.py:5", "b.py:20", relation="calls")
         result = resolve_graph(G)
@@ -242,13 +317,31 @@ class TestResolveGraph:
 
     def test_resolves_edge_to_nested_definition(self):
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="class", file_path="a.py",
-                    label="Service", start_line=1, end_line=50)
-        G.add_node("a.py:10", kind="method", file_path="a.py",
-                    label="connect", start_line=10, end_line=20)
+        G.add_node(
+            "a.py:1",
+            kind="class",
+            file_path="a.py",
+            label="Service",
+            start_line=1,
+            end_line=50,
+        )
+        G.add_node(
+            "a.py:10",
+            kind="method",
+            file_path="a.py",
+            label="connect",
+            start_line=10,
+            end_line=20,
+        )
         # Edge points inside the method
-        G.add_node("b.py:5", kind="function", file_path="b.py",
-                    label="runner", start_line=5, end_line=8)
+        G.add_node(
+            "b.py:5",
+            kind="function",
+            file_path="b.py",
+            label="runner",
+            start_line=5,
+            end_line=8,
+        )
         G.add_edge("b.py:5", "a.py:15", relation="calls")
         result = resolve_graph(G)
         assert result.resolved == 1
@@ -258,20 +351,37 @@ class TestResolveGraph:
 
     def test_skips_non_resolvable_relations(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="fn", start_line=5, end_line=10)
-        G.add_node("b.py:15", kind="function", file_path="b.py",
-                    label="other", start_line=15, end_line=20)
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=5,
+            end_line=10,
+        )
+        G.add_node(
+            "b.py:15",
+            kind="function",
+            file_path="b.py",
+            label="other",
+            start_line=15,
+            end_line=20,
+        )
         G.add_edge("a.py:5", "b.py:15", relation="co_change")
         result = resolve_graph(G)
         assert result.skipped_relation == 1
 
     def test_skips_edges_to_module_nodes_without_file_info(self):
         G = nx.DiGraph()
-        G.add_node("a", kind="function", file_path="a.py",
-                    label="fn", start_line=5, end_line=10)
-        G.add_node("external_lib", kind="external",
-                    file_path="", label="lib")
+        G.add_node(
+            "a",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=5,
+            end_line=10,
+        )
+        G.add_node("external_lib", kind="external", file_path="", label="lib")
         G.add_edge("a", "external_lib", relation="calls")
         result = resolve_graph(G)
         # external_lib has no file_path, so it won't be in the index
@@ -280,11 +390,21 @@ class TestResolveGraph:
 
     def test_unresolved_edge_remains(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="fn", start_line=5, end_line=10)
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=5,
+            end_line=10,
+        )
         # Target doesn't exist in graph
-        G.add_node("nonexistent:99", kind="unknown",
-                    file_path="nonexistent:99", label="")
+        G.add_node(
+            "nonexistent:99",
+            kind="unknown",
+            file_path="nonexistent:99",
+            label="",
+        )
         G.add_edge("a.py:5", "nonexistent:99", relation="calls")
         result = resolve_graph(G)
         assert result.unresolved > 0
@@ -292,10 +412,17 @@ class TestResolveGraph:
 
     def test_handles_import_resolution(self):
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py",
-                    label="run", start_line=1, end_line=10)
-        G.add_node("b.py:0", kind="module", file_path="b.py",
-                    label="b", start_line=0)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="run",
+            start_line=1,
+            end_line=10,
+        )
+        G.add_node(
+            "b.py:0", kind="module", file_path="b.py", label="b", start_line=0
+        )
         G.add_edge("a.py:1", "b.py:0", relation="imports")
         result = resolve_graph(G)
         # module is in DEFINITION_KINDS, so this is already resolved
@@ -308,45 +435,81 @@ class TestResolveGraphIntegration:
         G = nx.DiGraph()
 
         # File: services/database.py
-        G.add_node("services/database.py:10", kind="class",
-                    file_path="services/database.py",
-                    label="Database", start_line=10, end_line=60)
-        G.add_node("services/database.py:15", kind="method",
-                    file_path="services/database.py",
-                    label="connect", start_line=15, end_line=30,
-                    signature="(config: Config) -> Connection")
-        G.add_node("services/database.py:35", kind="method",
-                    file_path="services/database.py",
-                    label="query", start_line=35, end_line=55,
-                    signature="(sql: str) -> Result")
+        G.add_node(
+            "services/database.py:10",
+            kind="class",
+            file_path="services/database.py",
+            label="Database",
+            start_line=10,
+            end_line=60,
+        )
+        G.add_node(
+            "services/database.py:15",
+            kind="method",
+            file_path="services/database.py",
+            label="connect",
+            start_line=15,
+            end_line=30,
+            signature="(config: Config) -> Connection",
+        )
+        G.add_node(
+            "services/database.py:35",
+            kind="method",
+            file_path="services/database.py",
+            label="query",
+            start_line=35,
+            end_line=55,
+            signature="(sql: str) -> Result",
+        )
 
         # File: api/handlers.py
-        G.add_node("api/handlers.py:5", kind="function",
-                    file_path="api/handlers.py",
-                    label="get_users", start_line=5, end_line=25)
+        G.add_node(
+            "api/handlers.py:5",
+            kind="function",
+            file_path="api/handlers.py",
+            label="get_users",
+            start_line=5,
+            end_line=25,
+        )
 
         # Edges: some already resolved, some not
         # Resolved: points directly to method
-        G.add_edge("api/handlers.py:5", "services/database.py:15",
-                    relation="calls")
-        # Unresolved: points to line inside Database.query but not the method node
-        G.add_edge("api/handlers.py:5", "services/database.py:40",
-                    relation="calls")
+        G.add_edge(
+            "api/handlers.py:5", "services/database.py:15", relation="calls"
+        )
+        # Unresolved: points to line inside Database.query
+        # but not the method node
+        G.add_edge(
+            "api/handlers.py:5", "services/database.py:40", relation="calls"
+        )
 
         result = resolve_graph(G)
-        assert result.resolved == 1  # services/database.py:40 -> services/database.py:35
-        assert result.already_resolved >= 1  # services/database.py:15 already correct
+        assert result.resolved == 1
+        # services/database.py:40 -> services/database.py:35
+        assert result.already_resolved >= 1
+        # services/database.py:15 already correct
         assert G.has_edge("api/handlers.py:5", "services/database.py:35")
         assert G.has_edge("api/handlers.py:5", "services/database.py:15")
 
     def test_preserves_edge_attributes_on_resolve(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="fn", start_line=5, end_line=10)
-        G.add_node("b.py:15", kind="function", file_path="b.py",
-                    label="callee", start_line=15, end_line=30)
-        G.add_edge("a.py:5", "b.py:20", relation="calls",
-                    confidence="INFERRED")
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=5,
+            end_line=10,
+        )
+        G.add_node(
+            "b.py:15",
+            kind="function",
+            file_path="b.py",
+            label="callee",
+            start_line=15,
+            end_line=30,
+        )
+        G.add_edge("a.py:5", "b.py:20", relation="calls", confidence="INFERRED")
 
         resolve_graph(G)
         # New edge should preserve attributes
@@ -356,10 +519,22 @@ class TestResolveGraphIntegration:
 
     def test_no_duplicate_edges_after_resolution(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", kind="function", file_path="a.py",
-                    label="fn", start_line=5, end_line=10)
-        G.add_node("b.py:15", kind="function", file_path="b.py",
-                    label="callee", start_line=15, end_line=30)
+        G.add_node(
+            "a.py:5",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=5,
+            end_line=10,
+        )
+        G.add_node(
+            "b.py:15",
+            kind="function",
+            file_path="b.py",
+            label="callee",
+            start_line=15,
+            end_line=30,
+        )
         # Two edges: one resolved, one not
         G.add_edge("a.py:5", "b.py:15", relation="calls")  # Already resolved
         G.add_edge("a.py:5", "b.py:20", relation="calls")  # Needs resolution
@@ -368,9 +543,11 @@ class TestResolveGraphIntegration:
         assert result.already_resolved >= 1
         assert result.resolved >= 0
         # Should not create duplicate edges
-        edge_count = sum(1 for _, _, d in G.edges(data=True)
-                         if d.get("relation") == "calls")
-        assert edge_count <= 2  # 1 already resolved + 0 or 1 new (original removed)
+        edge_count = sum(
+            1 for _, _, d in G.edges(data=True) if d.get("relation") == "calls"
+        )
+        assert edge_count <= 2
+        # 1 already resolved + 0 or 1 new (original removed)
 
 
 class TestResolutionResult:

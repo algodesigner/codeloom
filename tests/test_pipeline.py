@@ -37,14 +37,11 @@ def _create_mini_project(tmp_path: Path) -> Path:
     )
 
     (src / "config.yaml").write_text(
-        "database:\n"
-        "  host: localhost\n"
-        "  port: 5432\n"
+        "database:\n  host: localhost\n  port: 5432\n"
     )
 
     (src / "README.md").write_text(
-        "# Test Project\n"
-        "A simple test project for pipeline testing.\n"
+        "# Test Project\nA simple test project for pipeline testing.\n"
     )
 
     return src
@@ -84,10 +81,7 @@ class TestPipelineNoEmbed:
         src = _create_mini_project(tmp_path)
         result = run_pipeline(src, output_dir=tmp_path / "out", embed=False)
 
-        kinds = {
-            data.get("kind")
-            for _, data in result.graph.nodes(data=True)
-        }
+        kinds = {data.get("kind") for _, data in result.graph.nodes(data=True)}
         assert "module" in kinds
         # Should extract at least classes or functions
         assert "class" in kinds or "function" in kinds
@@ -97,8 +91,7 @@ class TestPipelineNoEmbed:
         result = run_pipeline(src, output_dir=tmp_path / "out", embed=False)
 
         relations = {
-            data.get("relation")
-            for _, _, data in result.graph.edges(data=True)
+            data.get("relation") for _, _, data in result.graph.edges(data=True)
         }
         assert "defines" in relations
 
@@ -153,7 +146,9 @@ class TestPipelineNoEmbed:
             stages_seen.append(stage)
 
         run_pipeline(
-            src, output_dir=tmp_path / "out", embed=False,
+            src,
+            output_dir=tmp_path / "out",
+            embed=False,
             on_progress=on_progress,
         )
 
@@ -169,8 +164,10 @@ class TestPipelineNoEmbed:
         (src / "big.py").write_text("y = 2\n" * 10000)
 
         result = run_pipeline(
-            src, output_dir=tmp_path / "out",
-            embed=False, max_file_size=100,
+            src,
+            output_dir=tmp_path / "out",
+            embed=False,
+            max_file_size=100,
         )
 
         files = {f.path.name for f in result.detect_result.files}

@@ -18,6 +18,7 @@ def _skip_if_no_ts_parser():
         pytest.skip("tree-sitter-typescript not available")
     # Clear tags_extract cache to avoid cross-test pollution
     from codeloom.core.tags_extract import _cache
+
     _cache.pop("typescript", None)
 
 
@@ -168,8 +169,11 @@ enum Color {
         assert enums[0].name == "Color"
         # enumメンバーはdefinesエッジを持つべき
         enum_id = enums[0].id
-        defines = [e for e in result.edges
-                   if e.relation == "defines" and e.source == enum_id]
+        defines = [
+            e
+            for e in result.edges
+            if e.relation == "defines" and e.source == enum_id
+        ]
         assert len(defines) >= 1
 
     def test_exported_enum(self, tmp_path):

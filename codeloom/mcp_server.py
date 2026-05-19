@@ -102,7 +102,8 @@ def _load():
 
     db = _get_db_path()
     if not Path(db).exists():
-        cwd_parents = "/".join(p.name for p in [Path.cwd(), *Path.cwd().parents][:4])
+        parent_list = [Path.cwd(), *list(Path.cwd().parents)[:3]]
+        cwd_parents = "/".join(p.name for p in parent_list)
         raise FileNotFoundError(
             f"Code graph not found at {db}. "
             f"Run 'codeloom build <dir>' first. "
@@ -160,8 +161,13 @@ def search(
     from codeloom.query.hybrid import hybrid_search
 
     graph = hybrid_search(
-        query, store, G, top_k=top_k, fast=fast,
-        kind=kind, file_pattern=file_pattern,
+        query,
+        store,
+        G,
+        top_k=top_k,
+        fast=fast,
+        kind=kind,
+        file_pattern=file_pattern,
         penalise_tests=not include_tests,
         snippet_count=3 if snippets else 0,
     )
@@ -186,7 +192,8 @@ def node(node_id: str) -> str:
         # IDとラベルの両方で部分一致検索
         q = node_id.lower()
         matches = [
-            n for n in G.nodes
+            n
+            for n in G.nodes
             if q in n.lower() or q in G.nodes[n].get("label", "").lower()
         ]
 
@@ -205,7 +212,9 @@ def node(node_id: str) -> str:
         if data.get("docstring"):
             lines.append(f"- **Docstring**: {data['docstring'][:300]}")
         if data.get("start_line"):
-            lines.append(f"- **Lines**: {data.get('start_line')}-{data.get('end_line', '?')}")
+            sl = data.get("start_line")
+            el = data.get("end_line", "?")
+            lines.append(f"- **Lines**: {sl}-{el}")
 
         # Edges
         out_edges = list(G.out_edges(nid, data=True))[:10]
@@ -214,15 +223,15 @@ def node(node_id: str) -> str:
             lines.append("- **Outgoing edges**:")
             for _, target, edata in out_edges:
                 tlabel = G.nodes.get(target, {}).get("label", target)
-                rel = edata.get('relation', '?')
-                w = edata.get('weight', 0)
+                rel = edata.get("relation", "?")
+                w = edata.get("weight", 0)
                 lines.append(f"  - → {tlabel} ({rel}, w={w:.2f})")
         if in_edges:
             lines.append("- **Incoming edges**:")
             for source, _, edata in in_edges:
                 slabel = G.nodes.get(source, {}).get("label", source)
-                rel = edata.get('relation', '?')
-                w = edata.get('weight', 0)
+                rel = edata.get("relation", "?")
+                w = edata.get("weight", 0)
                 lines.append(f"  - ← {slabel} ({rel}, w={w:.2f})")
         lines.append("")
     return "\n".join(lines)
@@ -271,7 +280,9 @@ def stats() -> str:
     if god_nodes:
         lines.append("\n### God Nodes (high fan-out)")
         for gn in god_nodes[:10]:
-            lines.append(f"- {gn['label']} ({gn['kind']}): {gn['degree']} connections")
+            lines.append(
+                f"- {gn['label']} ({gn['kind']}): {gn['degree']} connections"
+            )
 
     lines.append(f"\n- **Database**: {_get_db_path()}")
     return "\n".join(lines)
@@ -300,7 +311,8 @@ def communities(search_query: str = "", level: int = -1) -> str:
         lines = [f"## Communities matching '{search_query}'\n"]
         for comm in results:
             cid = comm.get("community_id", comm.get("id", "?"))
-            lines.append(f"### Community {cid} (level {comm.get('level', '?')})")
+            lvl = comm.get("level", "?")
+            lines.append(f"### Community {cid} (level {lvl})")
             lines.append(f"- **Score**: {comm['score']:.2f}")
             lines.append(f"- **Nodes**: {len(comm.get('node_ids', []))}")
             if comm.get("summary"):
@@ -326,15 +338,22 @@ def communities(search_query: str = "", level: int = -1) -> str:
         lines = [f"## All Communities ({len(rows)} total)\n"]
         for row in rows[:20]:
             # Count members
-            cnt = store.conn.execute(
-                "SELECT COUNT(*) as c FROM community_members WHERE community_id = ?",
+            cnt_row = store.conn.execute(
+                "SELECT COUNT(*) as c FROM community_members"
+                " WHERE community_id = ?",
                 (row["id"],),
-            ).fetchone()["c"]
+            )
+            cnt = cnt_row.fetchone()["c"]
             summary = (row["summary"] or "No summary")[:100]
-            lines.append(f"- **Community {row['id']}** (level {row['level']}): "
-                         f"{cnt} nodes — {summary}")
+            lines.append(
+                f"- **Community {row['id']}** (level {row['level']}): "
+                f"{cnt} nodes — {summary}"
+            )
         if len(rows) > 20:
-            lines.append(f"\n... and {len(rows) - 20} more. Use search_query to filter.")
+            remaining = len(rows) - 20
+            lines.append(
+                f"\n... and {remaining} more. Use search_query to filter."
+            )
         return "\n".join(lines)
 
 
@@ -386,7 +405,8 @@ def build(directory: str = ".", incremental: bool = True) -> str:
     edges = getattr(result, "edge_count", 0) or (
         result.graph.number_of_edges() if getattr(result, "graph", None) else 0
     )
-    files = len(result.detect_result.files) if getattr(result, "detect_result", None) else 0
+    dr = getattr(result, "detect_result", None)
+    files = len(dr.files) if dr else 0
 
     if hasattr(result, "release_memory"):
         result.release_memory()
@@ -408,6 +428,7 @@ def build(directory: str = ".", incremental: bool = True) -> str:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main():
     """Run the MCP server with stdio transport."""

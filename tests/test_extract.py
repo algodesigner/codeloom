@@ -12,7 +12,10 @@ class TestExtractPython:
         assert "Bar" in names
 
     def test_extracts_functions(self):
-        code = "def hello(name):\n    return name\n\nasync def fetch(url):\n    pass\n"
+        code = (
+            "def hello(name):\n    return name\n\n"
+            "async def fetch(url):\n    pass\n"
+        )
         result = extract_file("test.py", "python", code)
         names = {n.name for n in result.nodes}
         assert "hello" in names
@@ -72,7 +75,9 @@ class TestExtractHTML:
         assert docs[0].name == "page"
 
     def test_extracts_local_links(self):
-        html = '<a href="other.html">link</a><a href="https://example.com">ext</a>'
+        html = (
+            '<a href="other.html">link</a><a href="https://example.com">ext</a>'
+        )
         result = extract_file("page.html", "html", html)
         ref_edges = [e for e in result.edges if e.relation == "references"]
         targets = {e.target for e in ref_edges}

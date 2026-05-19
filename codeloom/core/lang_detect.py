@@ -28,7 +28,8 @@ _ARABIC_RANGE = re.compile(r"[\u0600-\u06ff]")
 _DEVANAGARI_RANGE = re.compile(r"[\u0900-\u097f]")
 _THAI_RANGE = re.compile(r"[\u0e00-\u0e7f]")
 
-# Characters to ignore when counting (whitespace, digits, punctuation, code symbols)
+# Characters to ignore when counting (whitespace, digits,
+# punctuation, code symbols)
 _IGNORE = re.compile(r"[\s\d\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]")
 
 
@@ -72,6 +73,7 @@ def detect_language(texts: list[str], threshold: float = 0.90) -> str:
 
     # Sample up to 200 texts for efficiency
     import random
+
     sample = texts if len(texts) <= 200 else random.sample(texts, 200)
 
     combined = " ".join(sample)
@@ -85,8 +87,12 @@ def detect_language(texts: list[str], threshold: float = 0.90) -> str:
     non_latin = counts["cjk"] + counts["cyrillic"] + counts["other"]
 
     logger.debug(
-        "Language detection: %d chars, latin=%.1f%%, cjk=%d, cyrillic=%d, other=%d",
-        total, latin_ratio * 100, counts["cjk"], counts["cyrillic"], counts["other"],
+        "Lang detect: %d chars, latin=%.1f%%, cjk=%d, cyr=%d, other=%d",
+        total,
+        latin_ratio * 100,
+        counts["cjk"],
+        counts["cyrillic"],
+        counts["other"],
     )
 
     if latin_ratio >= threshold and non_latin < 10:

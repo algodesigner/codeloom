@@ -1,6 +1,7 @@
 """Graph build module — assembles extracted nodes/edges into a NetworkX graph.
 
-Handles node deduplication, edge merging, and cross-file relationship resolution.
+Handles node deduplication, edge merging, and cross-file relationship
+resolution.
 """
 
 from __future__ import annotations
@@ -58,7 +59,8 @@ def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
                 wildcard_edges.append(edge)
             elif G.has_node(edge.source) and G.has_node(edge.target):
                 G.add_edge(
-                    edge.source, edge.target,
+                    edge.source,
+                    edge.target,
                     relation=edge.relation,
                     confidence=edge.confidence,
                 )
@@ -82,14 +84,21 @@ def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
             # Create a placeholder external node
             ext_id = f"external::{target_name}"
             if not G.has_node(ext_id):
-                G.add_node(ext_id, label=target_name, kind="external", file_path="", language="")
+                G.add_node(
+                    ext_id,
+                    label=target_name,
+                    kind="external",
+                    file_path="",
+                    language="",
+                )
             candidates = [ext_id]
             confidence = "INFERRED"
 
         for candidate in candidates:
             if G.has_node(edge.source):
                 G.add_edge(
-                    edge.source, candidate,
+                    edge.source,
+                    candidate,
                     relation=edge.relation,
                     confidence=confidence,
                 )
@@ -101,7 +110,8 @@ def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
 
 
 def _add_directory_nodes(G: nx.DiGraph) -> None:
-    """Create directory nodes and connect them to files and parent directories."""
+    """Create directory nodes and connect them to files and parent
+    directories."""
     file_paths: set[str] = set()
     for _, data in G.nodes(data=True):
         fp = data.get("file_path", "")
@@ -135,11 +145,15 @@ def _add_directory_nodes(G: nx.DiGraph) -> None:
 
             # Connect parent → child directory
             if i >= 2:
-                parent_path = str(PurePosixPath(*parts[:i - 1]))
+                parent_path = str(PurePosixPath(*parts[: i - 1]))
                 parent_id = f"dir::{parent_path}"
                 if G.has_node(parent_id) and not G.has_edge(parent_id, dir_id):
-                    G.add_edge(parent_id, dir_id, relation="contains",
-                               confidence="EXTRACTED")
+                    G.add_edge(
+                        parent_id,
+                        dir_id,
+                        relation="contains",
+                        confidence="EXTRACTED",
+                    )
 
         # Connect deepest directory → file (module/document node)
         if len(parts) >= 2:
@@ -147,17 +161,29 @@ def _add_directory_nodes(G: nx.DiGraph) -> None:
             parent_id = f"dir::{parent_dir}"
             # Find the module/document node for this file
             for node_id, data in G.nodes(data=True):
-                if (data.get("file_path") == fp
-                        and data.get("kind") in ("module", "document")
-                        and not G.has_edge(parent_id, node_id)):
-                    G.add_edge(parent_id, node_id, relation="contains",
-                               confidence="EXTRACTED")
+                if (
+                    data.get("file_path") == fp
+                    and data.get("kind") in ("module", "document")
+                    and not G.has_edge(parent_id, node_id)
+                ):
+                    G.add_edge(
+                        parent_id,
+                        node_id,
+                        relation="contains",
+                        confidence="EXTRACTED",
+                    )
 
 
 # Tier 3: マージ/削除対象ノード種別
-MERGE_KINDS = frozenset({
-    "constructor", "property", "variable", "decorator", "type_alias",
-})
+MERGE_KINDS = frozenset(
+    {
+        "constructor",
+        "property",
+        "variable",
+        "decorator",
+        "type_alias",
+    }
+)
 
 
 def merge_tier3_nodes(G: nx.DiGraph) -> nx.DiGraph:
@@ -255,11 +281,13 @@ def compute_edge_weights(
 ) -> None:
     """Compute composite edge weights combining multiple signals.
 
-    weight = 0.4 * semantic + 0.3 * confidence + 0.2 * proximity + 0.1 * bidirectional
+    weight = 0.4 * semantic + 0.3 * confidence
+            + 0.2 * proximity + 0.1 * bidirectional
 
     Args:
         G: The code graph (modified in-place).
-        embeddings: Optional node_id -> embedding vector mapping for semantic similarity.
+        embeddings: Optional node_id -> embedding vector mapping for
+            semantic similarity.
     """
     import numpy as np
 
@@ -283,7 +311,10 @@ def compute_edge_weights(
                 semantic = max(0.0, semantic)  # clamp negative
 
         # 2. Confidence score
-        confidence = _CONFIDENCE_SCORES.get(data.get("confidence", "EXTRACTED"), 0.5)
+        confidence = _CONFIDENCE_SCORES.get(
+            data.get("confidence", "EXTRACTED"),
+            0.5,
+        )
 
         # 3. Proximity score (based on file paths)
         u_path = G.nodes[u].get("file_path", "") if G.has_node(u) else ""
@@ -301,13 +332,16 @@ def compute_edge_weights(
         bidir = 1.0 if (u, v) in bidir_pairs else 0.0
 
         # Composite weight
-        weight = (0.4 * semantic + 0.3 * confidence + 0.2 * proximity + 0.1 * bidir)
+        weight = (
+            0.4 * semantic + 0.3 * confidence + 0.2 * proximity + 0.1 * bidir
+        )
         data["weight"] = round(weight, 4)
         data["semantic_similarity"] = round(semantic, 4)
 
 
 def compute_pagerank(
-    G: nx.DiGraph, personalization: dict[str, float] | None = None,
+    G: nx.DiGraph,
+    personalization: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """Compute PageRank importance scores for all nodes.
 

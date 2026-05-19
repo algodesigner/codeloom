@@ -1,6 +1,5 @@
 """Tests for file detection and classification."""
 
-
 from codeloom.core.detect import EXT_TO_LANG, detect
 
 

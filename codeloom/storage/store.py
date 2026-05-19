@@ -94,20 +94,25 @@ class KnowledgeStore:
             CREATE INDEX IF NOT EXISTS idx_nodes_file ON nodes(file_path);
             CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source);
             CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target);
-            CREATE INDEX IF NOT EXISTS idx_communities_level ON communities(level);
+            CREATE INDEX IF NOT EXISTS idx_communities_level
+                ON communities(level);
 
             CREATE TABLE IF NOT EXISTS community_members (
                 community_id INTEGER NOT NULL,
                 node_id TEXT NOT NULL,
                 PRIMARY KEY (community_id, node_id)
             );
-            CREATE INDEX IF NOT EXISTS idx_cm_node ON community_members(node_id);
-            CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
+            CREATE INDEX IF NOT EXISTS idx_cm_node
+                ON community_members(node_id);
+            CREATE INDEX IF NOT EXISTS idx_cm_community
+                ON community_members(community_id);
         """)
 
         # Migrate: add metadata column to edges if missing (pre-v0.12 DBs)
         try:
-            self.conn.execute("ALTER TABLE edges ADD COLUMN metadata TEXT DEFAULT '{}'")
+            self.conn.execute(
+                "ALTER TABLE edges ADD COLUMN metadata TEXT DEFAULT '{}'",
+            )
         except Exception:
             pass  # column already exists
 
@@ -126,7 +131,10 @@ class KnowledgeStore:
                 )
             """)
         except Exception:
-            logger.debug("FTS5 not available in this SQLite build", exc_info=True)
+            logger.debug(
+                "FTS5 not available in this SQLite build",
+                exc_info=True,
+            )
 
     # --- Graph persistence ---
 
@@ -140,7 +148,8 @@ class KnowledgeStore:
             c.execute(
                 """INSERT OR REPLACE INTO nodes
                    (id, label, kind, file_path, language, start_line, end_line,
-                    docstring, signature, source_snippet, pagerank, community_ids, metadata)
+                    docstring, signature, source_snippet, pagerank,
+                    community_ids, metadata)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     node_id,
@@ -155,24 +164,49 @@ class KnowledgeStore:
                     data.get("source_snippet", ""),
                     data.get("pagerank", 0.0),
                     json.dumps(data.get("community_ids", [])),
-                    json.dumps({k: v for k, v in data.items()
-                                if k not in ("label", "kind", "file_path", "language",
-                                             "start_line", "end_line", "docstring",
-                                             "signature", "source_snippet", "pagerank",
-                                             "community_ids")}),
+                    json.dumps(
+                        {
+                            k: v
+                            for k, v in data.items()
+                            if k
+                            not in (
+                                "label",
+                                "kind",
+                                "file_path",
+                                "language",
+                                "start_line",
+                                "end_line",
+                                "docstring",
+                                "signature",
+                                "source_snippet",
+                                "pagerank",
+                                "community_ids",
+                            )
+                        }
+                    ),
                 ),
             )
 
         for u, v, data in G.edges(data=True):
-            # Store extra edge attributes (co_change_count, sample_messages, etc.) as JSON
-            extra = {k: v for k, v in data.items()
-                     if k not in ("relation", "confidence", "weight")}
+            # Store extra edge attributes as JSON
+            # (co_change_count, sample_messages, etc.)
+            extra = {
+                k: v
+                for k, v in data.items()
+                if k not in ("relation", "confidence", "weight")
+            }
             c.execute(
                 """INSERT OR REPLACE INTO edges
                    (source, target, relation, confidence, weight, metadata)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (u, v, data.get("relation", ""), data.get("confidence", "EXTRACTED"),
-                 data.get("weight", 1.0), json.dumps(extra)),
+                (
+                    u,
+                    v,
+                    data.get("relation", ""),
+                    data.get("confidence", "EXTRACTED"),
+                    data.get("weight", 1.0),
+                    json.dumps(extra),
+                ),
             )
 
         # Populate community_members mapping table
@@ -180,7 +214,8 @@ class KnowledgeStore:
         for node_id, data in G.nodes(data=True):
             for comm_id in data.get("community_ids", []):
                 c.execute(
-                    "INSERT OR IGNORE INTO community_members (community_id, node_id) VALUES (?, ?)",
+                    "INSERT OR IGNORE INTO community_members "
+                    "(community_id, node_id) VALUES (?, ?)",
                     (comm_id, node_id),
                 )
 
@@ -234,7 +269,8 @@ class KnowledgeStore:
         c = self.conn.cursor()
         for node_id, vec in embeddings.items():
             c.execute(
-                """INSERT OR REPLACE INTO embeddings (node_id, vector, model, model_type)
+                """INSERT OR REPLACE INTO embeddings
+                   (node_id, vector, model, model_type)
                    VALUES (?, ?, ?, ?)""",
                 (node_id, vec.tobytes(), model_name, model_type),
             )
@@ -251,21 +287,31 @@ class KnowledgeStore:
     def load_embeddings(self) -> dict[str, np.ndarray]:
         """Load embeddings from SQLite."""
         result = {}
-        rows = self.conn.execute("SELECT node_id, vector FROM embeddings").fetchall()
+        rows = self.conn.execute(
+            "SELECT node_id, vector FROM embeddings",
+        ).fetchall()
         if not rows:
             return result
         for row in rows:
-            result[row["node_id"]] = np.frombuffer(row["vector"], dtype=np.float32)
+            result[row["node_id"]] = np.frombuffer(
+                row["vector"],
+                dtype=np.float32,
+            )
         return result
 
-    def _iter_embeddings_batched(self, model_type: str | None = None, batch_size: int = 1000):
+    def _iter_embeddings_batched(
+        self,
+        model_type: str | None = None,
+        batch_size: int = 1000,
+    ):
         """Iterate embeddings from DB in batches to limit memory usage.
 
         Args:
             model_type: Filter by "code" or "text". None = all.
 
         Yields:
-            (labels_batch, vectors_batch) where vectors_batch is float32 ndarray.
+            (labels_batch, vectors_batch) where vectors_batch
+            is float32 ndarray.
         """
         if model_type:
             cursor = self.conn.execute(
@@ -303,7 +349,8 @@ class KnowledgeStore:
             return
         faiss.write_index(index, str(self._faiss_index_path(model_type)))
         self._faiss_labels_path(model_type).write_text(
-            json.dumps(labels), encoding="utf-8",
+            json.dumps(labels),
+            encoding="utf-8",
         )
 
     def _load_faiss_from_disk(self, model_type: str) -> bool:
@@ -326,7 +373,11 @@ class KnowledgeStore:
             self._embedding_dim = index.d
             return True
         except Exception:
-            logger.debug("Failed to load FAISS index from disk for %s", model_type, exc_info=True)
+            logger.debug(
+                "Failed to load FAISS index from disk for %s",
+                model_type,
+                exc_info=True,
+            )
             return False
 
     def _build_index_for_type(self, model_type: str) -> None:
@@ -336,7 +387,9 @@ class KnowledgeStore:
         index = None
         all_labels: list[str] = []
 
-        for batch_labels, batch_vecs in self._iter_embeddings_batched(model_type=model_type):
+        for batch_labels, batch_vecs in self._iter_embeddings_batched(
+            model_type=model_type,
+        ):
             faiss.normalize_L2(batch_vecs)
             if index is None:
                 dim = batch_vecs.shape[1]
@@ -350,7 +403,10 @@ class KnowledgeStore:
             self._faiss_labels[model_type] = all_labels
             self._save_faiss_to_disk(model_type)
 
-    def build_vector_index(self, embeddings: dict[str, np.ndarray] | None = None) -> None:
+    def build_vector_index(
+        self,
+        embeddings: dict[str, np.ndarray] | None = None,
+    ) -> None:
         """Build FAISS indices for vector similarity search.
 
         Builds separate indices for code and text embeddings.
@@ -363,7 +419,10 @@ class KnowledgeStore:
             if not embeddings:
                 return
             labels = list(embeddings.keys())
-            vectors = np.array([embeddings[lb] for lb in labels], dtype=np.float32)
+            vectors = np.array(
+                [embeddings[lb] for lb in labels],
+                dtype=np.float32,
+            )
             faiss.normalize_L2(vectors)
             dim = vectors.shape[1]
 
@@ -419,10 +478,12 @@ class KnowledgeStore:
         Args:
             query_vec: Query embedding vector.
             top_k: Number of results.
-            model_type: "code", "text", or None (searches all available indices).
+            model_type: "code", "text", or None
+                (searches all available indices).
 
         Returns:
-            List of (node_id, cosine_similarity) tuples, sorted by similarity desc.
+            List of (node_id, cosine_similarity) tuples,
+            sorted by similarity desc.
         """
         import faiss
 
@@ -465,15 +526,24 @@ class KnowledgeStore:
         c.execute("DELETE FROM communities")
         for comm_id, comm in communities.items():
             c.execute(
-                """INSERT INTO communities (id, level, resolution, summary, parent_id, label)
+                """INSERT INTO communities
+                   (id, level, resolution, summary, parent_id, label)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (comm.id, comm.level, comm.resolution, comm.summary,
-                 comm.parent_id, getattr(comm, "label_text", "")),
+                (
+                    comm.id,
+                    comm.level,
+                    comm.resolution,
+                    comm.summary,
+                    comm.parent_id,
+                    getattr(comm, "label_text", ""),
+                ),
             )
         self.conn.commit()
 
     def community_search(
-        self, terms: list[str], top_k: int = 5,
+        self,
+        terms: list[str],
+        top_k: int = 5,
     ) -> list[dict]:
         """Search community summaries and return member node IDs.
 
@@ -483,7 +553,8 @@ class KnowledgeStore:
             return []
 
         rows = self.conn.execute(
-            "SELECT id, level, resolution, summary FROM communities ORDER BY level"
+            "SELECT id, level, resolution, summary "
+            "FROM communities ORDER BY level",
         ).fetchall()
 
         scored = []
@@ -503,13 +574,15 @@ class KnowledgeStore:
                 "SELECT node_id FROM community_members WHERE community_id = ?",
                 (comm_id,),
             ).fetchall()
-            results.append({
-                "community_id": comm_id,
-                "summary": row_dict["summary"],
-                "level": row_dict["level"],
-                "node_ids": [m["node_id"] for m in members],
-                "score": score,
-            })
+            results.append(
+                {
+                    "community_id": comm_id,
+                    "summary": row_dict["summary"],
+                    "level": row_dict["level"],
+                    "node_ids": [m["node_id"] for m in members],
+                    "score": score,
+                }
+            )
 
         return results
 
@@ -549,12 +622,16 @@ class KnowledgeStore:
                     ),
                 )
         except Exception:
-            logger.debug("FTS5 not available, skipping index rebuild", exc_info=True)
+            logger.debug(
+                "FTS5 not available, skipping index rebuild",
+                exc_info=True,
+            )
 
     def _has_fts(self) -> bool:
         """Check if FTS5 table exists."""
         row = self.conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='nodes_fts'"
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='nodes_fts'",
         ).fetchone()
         return row is not None
 
@@ -570,7 +647,10 @@ class KnowledgeStore:
             try:
                 return self._fts5_search(terms, top_k)
             except Exception:
-                logger.debug("FTS5 search failed, falling back to scan", exc_info=True)
+                logger.debug(
+                    "FTS5 search failed, falling back to scan",
+                    exc_info=True,
+                )
 
         # Fallback: Python-side scan
         return self._scan_search(terms, top_k)
@@ -600,7 +680,8 @@ class KnowledgeStore:
                 "label": row["label"],
                 "kind": row["kind"],
                 "file_path": row["file_path"],
-                "score": -row["bm25_score"],  # BM25 returns negative (lower = better)
+                # BM25 returns negative (lower = better)
+                "score": -row["bm25_score"],
                 "pagerank": row["pagerank"],
             }
             for row in rows
@@ -616,14 +697,16 @@ class KnowledgeStore:
             docstring = (row["docstring"] or "").lower()
             score = sum(1 for t in terms if t in label or t in docstring)
             if score > 0:
-                results.append({
-                    "id": row["id"],
-                    "label": row["label"],
-                    "kind": row["kind"],
-                    "file_path": row["file_path"],
-                    "score": score,
-                    "pagerank": row["pagerank"],
-                })
+                results.append(
+                    {
+                        "id": row["id"],
+                        "label": row["label"],
+                        "kind": row["kind"],
+                        "file_path": row["file_path"],
+                        "score": score,
+                        "pagerank": row["pagerank"],
+                    }
+                )
         results.sort(key=lambda x: (x["score"], x["pagerank"]), reverse=True)
         return results[:top_k]
 

@@ -15,9 +15,7 @@ def _create_project(tmp_path: Path) -> Path:
         "        pass\n"
     )
     (src / "utils.py").write_text(
-        "def helper():\n"
-        '    """A helper function."""\n'
-        "    return 42\n"
+        'def helper():\n    """A helper function."""\n    return 42\n'
     )
     return src
 
@@ -26,7 +24,9 @@ class TestIncrementalBuild:
     def test_first_build_extracts_all(self, tmp_path):
         src = _create_project(tmp_path)
         out = tmp_path / "out"
-        result = run_pipeline(src, output_dir=out, embed=False, incremental=True)
+        result = run_pipeline(
+            src, output_dir=out, embed=False, incremental=True
+        )
         assert len(result.extractions) > 0
         assert result.graph.number_of_nodes() > 0
 

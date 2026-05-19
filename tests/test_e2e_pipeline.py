@@ -125,8 +125,7 @@ class TestFullPipeline:
     def test_build_extracts_classes(self, sample_project):
         result = run_pipeline(sample_project, embed=False)
         labels = [
-            result.graph.nodes[n].get("label", "")
-            for n in result.graph.nodes
+            result.graph.nodes[n].get("label", "") for n in result.graph.nodes
         ]
         assert "AuthHandler" in labels
         assert "Server" in labels
@@ -134,16 +133,14 @@ class TestFullPipeline:
     def test_build_extracts_functions(self, sample_project):
         result = run_pipeline(sample_project, embed=False)
         labels = [
-            result.graph.nodes[n].get("label", "")
-            for n in result.graph.nodes
+            result.graph.nodes[n].get("label", "") for n in result.graph.nodes
         ]
         assert "create_auth_handler" in labels
 
     def test_build_extracts_js_classes(self, sample_project):
         result = run_pipeline(sample_project, embed=False)
         labels = [
-            result.graph.nodes[n].get("label", "")
-            for n in result.graph.nodes
+            result.graph.nodes[n].get("label", "") for n in result.graph.nodes
         ]
         assert "Logger" in labels
 
@@ -151,16 +148,14 @@ class TestFullPipeline:
         result = run_pipeline(sample_project, embed=False)
         assert result.graph.number_of_edges() > 0
         edge_relations = [
-            d.get("relation", "")
-            for _, _, d in result.graph.edges(data=True)
+            d.get("relation", "") for _, _, d in result.graph.edges(data=True)
         ]
         assert "defines" in edge_relations
 
     def test_build_computes_pagerank(self, sample_project):
         result = run_pipeline(sample_project, embed=False)
         pageranks = [
-            result.graph.nodes[n].get("pagerank", 0)
-            for n in result.graph.nodes
+            result.graph.nodes[n].get("pagerank", 0) for n in result.graph.nodes
         ]
         assert any(pr > 0 for pr in pageranks)
 
@@ -190,8 +185,10 @@ class TestStoreAfterBuild:
         store = KnowledgeStore(pipeline_result.db_path)
         results = store.keyword_search(["auth", "login"])
         assert len(results) > 0
-        assert any("auth" in r["label"].lower() or "login" in r["label"].lower()
-                    for r in results)
+        assert any(
+            "auth" in r["label"].lower() or "login" in r["label"].lower()
+            for r in results
+        )
         store.close()
 
     def test_store_keyword_search_no_results(self, sample_project):

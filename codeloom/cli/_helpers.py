@@ -29,23 +29,32 @@ def suppress_library_logs():
     os.environ["TRANSFORMERS_VERBOSITY"] = "error"
     os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
     for name in [
-        "sentence_transformers", "transformers", "torch", "huggingface_hub",
-        "filelock", "urllib3", "tqdm", "fsspec",
+        "sentence_transformers",
+        "transformers",
+        "torch",
+        "huggingface_hub",
+        "filelock",
+        "urllib3",
+        "tqdm",
+        "fsspec",
     ]:
         logging.getLogger(name).setLevel(logging.CRITICAL)
 
 
 # --- JSON output (for agent-facing commands) ---
 
+
 def json_out(data) -> None:
     """Print JSON to stdout (no Rich formatting)."""
     import json
+
     click.echo(json.dumps(data, separators=(",", ":"), default=str))
 
 
 def json_error(message: str) -> None:
     """Print error as JSON and exit with code 1."""
     import json
+
     click.echo(json.dumps({"error": message}))
     raise SystemExit(1)
 
@@ -126,7 +135,9 @@ def human_choose(
         if not sys.stdin.isatty():
             raise OSError("not a tty")
 
-        click.echo(f"{prompt}  {_DIM}(↑↓ to select, Enter to confirm){_RESET}\n")
+        click.echo(
+            f"{prompt}  {_DIM}(↑↓ to select, Enter to confirm){_RESET}\n"
+        )
         _render(selected)
 
         fd = sys.stdin.fileno()
@@ -156,7 +167,9 @@ def human_choose(
         # Fallback: numbered input (Windows or non-tty)
         click.echo(f"{prompt}\n")
         for i, choice in enumerate(choices, 1):
-            desc = f"  {_DIM}{descriptions[i - 1]}{_RESET}" if descriptions else ""
+            desc = (
+                f"  {_DIM}{descriptions[i - 1]}{_RESET}" if descriptions else ""
+            )
             marker = f"{_BOLD}>{_RESET}" if i == default else " "
             click.echo(f"  {marker} {i}) {choice}{desc}")
         click.echo()
@@ -176,6 +189,7 @@ def human_choose(
 
 
 # --- Utilities ---
+
 
 def resolve_db(db: str | None, source_dir: str) -> Path | None:
     """Find the knowledge database."""

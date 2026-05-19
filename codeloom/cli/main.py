@@ -26,7 +26,9 @@ from .integrations import register_integration_commands
 
 
 @click.group()
-@click.version_option(version=None, prog_name="codeloom", package_name="codeloom")
+@click.version_option(
+    version=None, prog_name="codeloom", package_name="codeloom"
+)
 @click.pass_context
 def cli(ctx):
     """codeloom: Local-first code graph with hybrid search."""
@@ -37,15 +39,31 @@ def cli(ctx):
 @cli.command()
 @click.argument("source_dir", type=click.Path(exists=True))
 @click.option(
-    "--output", "-o", type=click.Path(), default=None, help="Output directory for the database"
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Output directory for the database",
 )
 @click.option(
     "--model",
     default=None,
-    help="Override embedding model (default: dual-model, code=bge-small + text=MiniLM)",
+    help=(
+        "Override embedding model"
+        " (default: dual-model, code=bge-small + text=MiniLM)"
+    ),
 )
-@click.option("--max-file-size", default=1_000_000, type=int, help="Max file size in bytes")
-@click.option("--incremental", is_flag=True, help="Skip unchanged files (faster rebuilds)")
+@click.option(
+    "--max-file-size",
+    default=1_000_000,
+    type=int,
+    help="Max file size in bytes",
+)
+@click.option(
+    "--incremental",
+    is_flag=True,
+    help="Skip unchanged files (faster rebuilds)",
+)
 @click.option(
     "--lang",
     default="auto",
@@ -83,11 +101,13 @@ def build(
     )
 
     # Capture summary values before releasing memory
-    files_detected = len(result.detect_result.files) if result.detect_result else 0
-    files_skipped = len(result.detect_result.skipped) if result.detect_result else 0
+    dr = result.detect_result
+    files_detected = len(dr.files) if dr else 0
+    files_skipped = len(dr.skipped) if dr else 0
     nodes = result.node_count
     edges = result.edge_count
-    communities = len(result.cluster_result.communities) if result.cluster_result else 0
+    cr = result.cluster_result
+    communities = len(cr.communities) if cr else 0
     embeddings = result.embeddings_count
     db_path = result.db_path
     stage_timings = result.stage_timings or {}
@@ -111,16 +131,23 @@ def build(
 
 @cli.command()
 @click.argument("query")
-@click.option("--db", type=click.Path(), default=None, help="Path to knowledge.db")
+@click.option(
+    "--db", type=click.Path(), default=None, help="Path to knowledge.db"
+)
 @click.option("--top-k", default=30, type=int, help="Number of results")
 @click.option(
-    "--source-dir", type=click.Path(), default=".", help="Source dir (to find default DB)"
+    "--source-dir",
+    type=click.Path(),
+    default=".",
+    help="Source dir (to find default DB)",
 )
 @click.option(
     "--fast",
     is_flag=True,
     default=False,
-    help="Fast mode: text model only (lower latency, slightly reduced accuracy)",
+    help=(
+        "Fast mode: text model only (lower latency, slightly reduced accuracy)"
+    ),
 )
 @click.option(
     "--json/--text",
@@ -130,13 +157,25 @@ def build(
 )
 @click.option(
     "--kind",
-    type=click.Choice(["function", "class", "method", "interface", "enum",
-                        "struct", "trait", "section"], case_sensitive=False),
+    type=click.Choice(
+        [
+            "function",
+            "class",
+            "method",
+            "interface",
+            "enum",
+            "struct",
+            "trait",
+            "section",
+        ],
+        case_sensitive=False,
+    ),
     default=None,
     help="Filter by symbol kind",
 )
 @click.option(
-    "--file", "file_pattern",
+    "--file",
+    "file_pattern",
     type=str,
     default=None,
     help="Filter by file path glob (e.g. 'src/auth/*')",
@@ -145,18 +184,30 @@ def build(
     "--include-tests/--no-include-tests",
     "include_tests",
     default=False,
-    help="Give test files equal ranking weight. By default, test files are demoted.",
+    help=(
+        "Give test files equal ranking weight."
+        " By default, test files are demoted."
+    ),
 )
 @click.option(
     "--snippets",
     type=int,
     default=3,
-    help="Number of top seed results to annotate with source snippets (0 = disabled)",
+    help=(
+        "Number of top seed results to annotate"
+        " with source snippets (0 = disabled)"
+    ),
 )
 @click.pass_context
 def search(
-    ctx, query: str, db: str | None, top_k: int, source_dir: str,
-    fast: bool, json_output: bool, kind: str | None = None,
+    ctx,
+    query: str,
+    db: str | None,
+    top_k: int,
+    source_dir: str,
+    fast: bool,
+    json_output: bool,
+    kind: str | None = None,
     file_pattern: str | None = None,
     include_tests: bool = False,
     snippets: int = 0,
@@ -201,6 +252,7 @@ def search(
     source_dir_str = str(Path(source_dir).resolve()) + "/"
     if json_output:
         import json as _json
+
         click.echo(_json.dumps(graph.to_json(source_dir=source_dir_str)))
     else:
         click.echo(graph.to_text(source_dir=source_dir_str))
@@ -214,7 +266,9 @@ def _signal_options(fn):
     """Common options for per-signal search commands."""
     fn = click.argument("query")(fn)
     fn = click.option("--db", type=click.Path(), default=None)(fn)
-    fn = click.option("--top-k", default=30, type=int, help="Number of results")(fn)
+    fn = click.option(
+        "--top-k", default=30, type=int, help="Number of results"
+    )(fn)
     fn = click.option("--source-dir", type=click.Path(), default=".")(fn)
     return fn
 
@@ -277,7 +331,8 @@ def search_vector(query: str, db: str | None, top_k: int, source_dir: str):
         key = r["label"]
         if key not in seen or r["score"] > seen[key]["score"]:
             seen[key] = r
-    json_out(sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:top_k])
+    ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+    json_out(ranked[:top_k])
     store.close()
 
 
@@ -442,8 +497,12 @@ def stats(ctx, db: str | None, source_dir: str):
         except Exception:
             pass
 
-    comm_count = store.conn.execute("SELECT COUNT(*) FROM communities").fetchone()[0]
-    emb_count = store.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    comm_count = store.conn.execute(
+        "SELECT COUNT(*) FROM communities"
+    ).fetchone()[0]
+    emb_count = store.conn.execute(
+        "SELECT COUNT(*) FROM embeddings"
+    ).fetchone()[0]
 
     json_out(
         {
@@ -466,10 +525,24 @@ def stats(ctx, db: str | None, source_dir: str):
 @cli.command()
 @click.option("--db", type=click.Path(), default=None)
 @click.option("--source-dir", type=click.Path(), default=".", help="Source dir")
-@click.option("--level", type=int, default=None, help="Filter by hierarchy level")
-@click.option("--search", "query", type=str, default=None, help="Search community summaries")
+@click.option(
+    "--level", type=int, default=None, help="Filter by hierarchy level"
+)
+@click.option(
+    "--search",
+    "query",
+    type=str,
+    default=None,
+    help="Search community summaries",
+)
 @click.pass_context
-def communities(ctx, db: str | None, source_dir: str, level: int | None, query: str | None):
+def communities(
+    ctx,
+    db: str | None,
+    source_dir: str,
+    level: int | None,
+    query: str | None,
+):
     """List and search communities in the code graph."""
     from codeloom.storage.store import KnowledgeStore
 
@@ -523,7 +596,12 @@ def communities(ctx, db: str | None, source_dir: str, level: int | None, query: 
 @cli.command()
 @click.option("--db", type=click.Path(), default=None)
 @click.option("--source-dir", type=click.Path(), default=".")
-@click.option("--format", "fmt", type=click.Choice(["json", "graphml", "d3"]), default="json")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "graphml", "d3"]),
+    default="json",
+)
 @click.option("--output", "-o", type=click.Path(), default=None)
 def export(db: str | None, source_dir: str, fmt: str, output: str | None):
     """Export the code graph."""
@@ -617,9 +695,16 @@ def _graph_to_d3(G) -> dict:
 @click.option("--db", type=click.Path(), default=None)
 @click.option("--source-dir", type=click.Path(), default=".", help="Source dir")
 @click.option("--output", "-o", type=click.Path(), default=None)
-@click.option("--max-nodes", default=500, type=int, help="Max nodes to include (by PageRank)")
 @click.option(
-    "--offline", is_flag=True, help="Inline D3.js for airgapped/offline use (adds ~280KB)"
+    "--max-nodes",
+    default=500,
+    type=int,
+    help="Max nodes to include (by PageRank)",
+)
+@click.option(
+    "--offline",
+    is_flag=True,
+    help="Inline D3.js for airgapped/offline use (adds ~280KB)",
 )
 def visualize(
     db: str | None,
@@ -640,7 +725,11 @@ def visualize(
 
     # Trim to top N nodes by PageRank for browser performance
     if G.number_of_nodes() > max_nodes:
-        ranked = sorted(G.nodes(data=True), key=lambda x: x[1].get("pagerank", 0), reverse=True)
+        ranked = sorted(
+            G.nodes(data=True),
+            key=lambda x: x[1].get("pagerank", 0),
+            reverse=True,
+        )
         keep = {n for n, _ in ranked[:max_nodes]}
         G = G.subgraph(keep).copy()
 
@@ -669,7 +758,12 @@ def visualize(
     default=".",
     help="Source directory whose .codeloom/ to remove",
 )
-@click.option("--db", type=click.Path(), default=None, help="Specific database file to remove")
+@click.option(
+    "--db",
+    type=click.Path(),
+    default=None,
+    help="Specific database file to remove",
+)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
 def clean(source_dir: str, db: str | None, yes: bool):
     """Remove the knowledge base database and associated data."""
@@ -696,9 +790,21 @@ def clean(source_dir: str, db: str | None, yes: bool):
 
 
 @cli.command()
-@click.option("--db", type=click.Path(), default=None, help="Path to knowledge.db")
-@click.option("--source-dir", type=click.Path(), default=".", help="Source dir")
-@click.option("--top-k", default=30, type=int, help="Number of results per query")
+@click.option(
+    "--db", type=click.Path(), default=None, help="Path to knowledge.db"
+)
+@click.option(
+    "--source-dir",
+    type=click.Path(),
+    default=".",
+    help="Source dir",
+)
+@click.option(
+    "--top-k",
+    default=30,
+    type=int,
+    help="Number of results per query",
+)
 def query(db: str | None, source_dir: str, top_k: int):
     """Interactive search REPL for exploring the code graph.
 
@@ -735,7 +841,11 @@ def query(db: str | None, source_dir: str, top_k: int):
 
     def _preload_models():
         try:
-            from codeloom.query.embeddings import CODE_MODEL, TEXT_MODEL, _get_model
+            from codeloom.query.embeddings import (
+                CODE_MODEL,
+                TEXT_MODEL,
+                _get_model,
+            )
 
             _get_model(CODE_MODEL)
             _get_model(TEXT_MODEL)
@@ -744,7 +854,13 @@ def query(db: str | None, source_dir: str, top_k: int):
 
     threading.Thread(target=_preload_models, daemon=True).start()
 
-    json_out({"status": "ready", "nodes": G.number_of_nodes(), "edges": G.number_of_edges()})
+    json_out(
+        {
+            "status": "ready",
+            "nodes": G.number_of_nodes(),
+            "edges": G.number_of_edges(),
+        }
+    )
 
     while True:
         try:
@@ -762,7 +878,12 @@ def query(db: str | None, source_dir: str, top_k: int):
             node_id = user_input[6:].strip()
             _repl_show_node(G, node_id)
         elif user_input == ":stats":
-            json_out({"nodes": G.number_of_nodes(), "edges": G.number_of_edges()})
+            json_out(
+                {
+                    "nodes": G.number_of_nodes(),
+                    "edges": G.number_of_edges(),
+                }
+            )
         else:
             graph = hybrid_search(user_input, store, G, top_k=top_k)
             click.echo(graph.to_text())
@@ -777,7 +898,9 @@ def _repl_show_node(G, node_id: str) -> None:
         # IDとラベルの両方で部分一致検索
         q = node_id.lower()
         matches = [
-            n for n in G.nodes() if q in n.lower() or q in G.nodes[n].get("label", "").lower()
+            n
+            for n in G.nodes()
+            if q in n.lower() or q in G.nodes[n].get("label", "").lower()
         ]
         if not matches:
             json_out({"error": f"Node '{node_id}' not found."})
@@ -871,7 +994,11 @@ def show_node(ctx, node_id: str, db: str | None, source_dir: str):
             "outgoing": [
                 {
                     "target": target,
-                    "target_label": G.nodes[target].get("label", target) if target in G else target,
+                    "target_label": (
+                        G.nodes[target].get("label", target)
+                        if target in G
+                        else target
+                    ),
                     "relation": edata.get("relation", ""),
                     "confidence": edata.get("confidence", ""),
                 }
@@ -880,7 +1007,11 @@ def show_node(ctx, node_id: str, db: str | None, source_dir: str):
             "incoming": [
                 {
                     "source": source,
-                    "source_label": G.nodes[source].get("label", source) if source in G else source,
+                    "source_label": (
+                        G.nodes[source].get("label", source)
+                        if source in G
+                        else source
+                    ),
                     "relation": edata.get("relation", ""),
                     "confidence": edata.get("confidence", ""),
                 }
@@ -926,7 +1057,10 @@ def doctor():
     if v >= (3, 10):
         ok("python", f"Python {v.major}.{v.minor}.{v.micro}")
     else:
-        fail("python", f"Python {v.major}.{v.minor}.{v.micro} (requires >= 3.10)")
+        fail(
+            "python",
+            f"Python {v.major}.{v.minor}.{v.micro} (requires >= 3.10)",
+        )
 
     # 2. Core dependencies
     deps = [
@@ -944,7 +1078,10 @@ def doctor():
             ver = getattr(mod, "__version__", "installed")
             ok("dependencies", f"{pip_name} ({ver})")
         except ImportError:
-            fail("dependencies", f"{pip_name} — not installed (pip install {pip_name})")
+            fail(
+                "dependencies",
+                f"{pip_name} — not installed (pip install {pip_name})",
+            )
 
     # 3. Tree-sitter parsers
     try:
@@ -980,7 +1117,8 @@ def doctor():
         except ImportError:
             warn(
                 "tree_sitter",
-                f"{pip_name} ({lang}) — not installed (falls back to regex extraction)",
+                f"{pip_name} ({lang}) — not installed"
+                " (falls back to regex extraction)",
             )
 
     # 4. MCP server dependency
@@ -988,7 +1126,10 @@ def doctor():
         importlib.import_module("mcp")
         ok("mcp", "mcp (Model Context Protocol server available)")
     except ImportError:
-        warn("mcp", "mcp — not installed (optional, install with: pip install mcp)")
+        warn(
+            "mcp",
+            "mcp — not installed (optional, install with: pip install mcp)",
+        )
 
     # 5. Embedding models
     model_cache = Path.home() / ".codeloom" / "models"
@@ -998,10 +1139,16 @@ def doctor():
             for m in cached_models:
                 ok("models", f"Cached: {m}")
         else:
-            warn("models", "Model cache exists but empty — models will download on first build")
+            warn(
+                "models",
+                "Model cache exists but empty"
+                " — models will download on first build",
+            )
     else:
         warn(
-            "models", "No model cache at ~/.codeloom/models/ — models will download on first build"
+            "models",
+            "No model cache at ~/.codeloom/models/"
+            " — models will download on first build",
         )
 
     # 6. Code graph database
@@ -1019,25 +1166,43 @@ def doctor():
                 fail("database", f"Database integrity: {integrity}")
 
             try:
-                n_nodes = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
-                n_edges = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+                n_nodes = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[
+                    0
+                ]
+                n_edges = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[
+                    0
+                ]
                 ok("database", f"Nodes: {n_nodes}, Edges: {n_edges}")
                 if n_nodes == 0:
-                    warn("database", "Graph is empty — run 'codeloom build .' to populate")
+                    warn(
+                        "database",
+                        "Graph is empty — run 'codeloom build .' to populate",
+                    )
             except sqlite3.OperationalError:
-                fail("database", "Missing nodes/edges tables — database may be corrupted")
+                fail(
+                    "database",
+                    "Missing nodes/edges tables — database may be corrupted",
+                )
 
             try:
                 conn.execute("SELECT COUNT(*) FROM nodes_fts").fetchone()
                 ok("database", "FTS5 full-text search index: present")
             except sqlite3.OperationalError:
-                warn("database", "FTS5 index missing — keyword search may not work")
+                warn(
+                    "database",
+                    "FTS5 index missing — keyword search may not work",
+                )
 
             try:
-                n_comm = conn.execute("SELECT COUNT(*) FROM communities").fetchone()[0]
+                n_comm = conn.execute(
+                    "SELECT COUNT(*) FROM communities"
+                ).fetchone()[0]
                 ok("database", f"Communities: {n_comm}")
             except sqlite3.OperationalError:
-                warn("database", "Communities table missing — run build to generate")
+                warn(
+                    "database",
+                    "Communities table missing — run build to generate",
+                )
 
             faiss_path = cwd / ".codeloom" / "faiss_code.index"
             faiss_text_path = cwd / ".codeloom" / "faiss_text.index"
@@ -1047,18 +1212,26 @@ def doctor():
                 ok("database", f"FAISS code index: {code_size:.1f} KB")
                 ok("database", f"FAISS text index: {text_size:.1f} KB")
             elif faiss_path.exists() or faiss_text_path.exists():
-                warn("database", "Only one FAISS index found — dual-model search may be degraded")
+                warn(
+                    "database",
+                    "Only one FAISS index found"
+                    " — dual-model search may be degraded",
+                )
             else:
                 warn(
                     "database",
-                    "No FAISS indexes — run 'codeloom build .' to generate embeddings",
+                    "No FAISS indexes"
+                    " — run 'codeloom build .' to generate embeddings",
                 )
 
             conn.close()
         except sqlite3.DatabaseError as e:
             fail("database", f"Cannot open database: {e}")
     else:
-        warn("database", f"No database at {db_path} — run 'codeloom build .' to create")
+        warn(
+            "database",
+            f"No database at {db_path} — run 'codeloom build .' to create",
+        )
 
     total = counts["ok"] + counts["fail"] + counts["warn"]
     click.echo(
@@ -1080,11 +1253,25 @@ def mcp():
 
     Or in opencode.json:
 
-        { "mcp": { "codeloom": { "type": "local", "command": ["codeloom", "mcp"] } } }
+        {
+            "mcp": {
+                "codeloom": {
+                    "type": "local",
+                    "command": ["codeloom", "mcp"],
+                }
+            }
+        }
 
     Or in .cursor/mcp.json / .vscode/mcp.json:
 
-        { "mcpServers": { "codeloom": { "command": "codeloom", "args": ["mcp"] } } }
+        {
+            "mcpServers": {
+                "codeloom": {
+                    "command": "codeloom",
+                    "args": ["mcp"],
+                }
+            }
+        }
     """
     from codeloom.mcp_server import main as mcp_main
 

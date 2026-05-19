@@ -11,6 +11,7 @@ from codeloom.core.ts_extract import _ensure_parser, extract_file_ts
 def _reset_parsers():
     """Reset cached parsers between tests."""
     from codeloom.core import ts_extract
+
     ts_extract._parsers.clear()
     ts_extract._languages.clear()
 
@@ -23,10 +24,13 @@ from codeloom.core import ts_extract as _ts  # noqa: E402
 _ts._parsers.clear()
 _ts._languages.clear()
 
-pytestmark = pytest.mark.skipif(not JS_AVAILABLE, reason="tree-sitter-javascript not installed")
+pytestmark = pytest.mark.skipif(
+    not JS_AVAILABLE, reason="tree-sitter-javascript not installed"
+)
 
 
 # --- Simple function extraction ---
+
 
 class TestJsFunctionExtraction:
     def test_function_declaration(self):
@@ -57,6 +61,7 @@ class TestJsFunctionExtraction:
 
 # --- Class extraction ---
 
+
 class TestJsClassExtraction:
     def test_class_declaration(self):
         code = (
@@ -70,7 +75,12 @@ class TestJsClassExtraction:
         assert kinds["Animal"] == "class"
 
     def test_class_methods_are_extracted(self):
-        code = "class Dog {\n  bark() { return 'woof'; }\n  fetch(item) { return item; }\n}"
+        code = (
+            "class Dog {\n"
+            "  bark() { return 'woof'; }\n"
+            "  fetch(item) { return item; }\n"
+            "}"
+        )
         result = extract_file_ts("src/dog.js", "javascript", code)
         names = [n.name for n in result.nodes]
         assert "Dog.bark" in names
@@ -99,6 +109,7 @@ class TestJsClassExtraction:
 
 # --- Import extraction ---
 
+
 class TestJsImportExtraction:
     def test_import_statement(self):
         code = "import express from 'express';\n\nfunction app() {}"
@@ -115,6 +126,7 @@ class TestJsImportExtraction:
 
 # --- Constants ---
 
+
 class TestJsConstantExtraction:
     def test_uppercase_const(self):
         code = "const MAX_RETRIES = 3;"
@@ -130,6 +142,7 @@ class TestJsConstantExtraction:
 
 
 # --- Edge cases ---
+
 
 class TestJsEdgeCases:
     def test_empty_file(self):
@@ -188,9 +201,10 @@ export function createServer(port) {
 
 # --- Fallback behavior ---
 
+
 class TestFallbackBehavior:
     def test_unknown_language_falls_back(self):
-        code = "fn main() { println!(\"hello\"); }"
+        code = 'fn main() { println!("hello"); }'
         result = extract_file_ts("src/main.rs", "rust", code)
         # Should still return something via regex fallback
         assert result is not None

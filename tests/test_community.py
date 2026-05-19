@@ -14,27 +14,61 @@ def _build_graph():
     """Build a small test graph with known structure."""
     G = nx.DiGraph()
     # Auth module
-    G.add_node("auth::module", label="auth", kind="module", file_path="auth.py",
-               docstring="Authentication module")
-    G.add_node("auth::class::AuthHandler", label="AuthHandler", kind="class",
-               file_path="auth.py", docstring="Handles user authentication")
-    G.add_node("auth::method::login", label="login", kind="method",
-               file_path="auth.py", docstring="Log in a user")
-    G.add_node("auth::method::logout", label="logout", kind="method",
-               file_path="auth.py")
+    G.add_node(
+        "auth::module",
+        label="auth",
+        kind="module",
+        file_path="auth.py",
+        docstring="Authentication module",
+    )
+    G.add_node(
+        "auth::class::AuthHandler",
+        label="AuthHandler",
+        kind="class",
+        file_path="auth.py",
+        docstring="Handles user authentication",
+    )
+    G.add_node(
+        "auth::method::login",
+        label="login",
+        kind="method",
+        file_path="auth.py",
+        docstring="Log in a user",
+    )
+    G.add_node(
+        "auth::method::logout",
+        label="logout",
+        kind="method",
+        file_path="auth.py",
+    )
 
     # DB module
-    G.add_node("db::module", label="db", kind="module", file_path="db.py",
-               docstring="Database layer")
-    G.add_node("db::class::Connection", label="Connection", kind="class",
-               file_path="db.py", docstring="Database connection pool")
-    G.add_node("db::method::query", label="query", kind="method",
-               file_path="db.py")
+    G.add_node(
+        "db::module",
+        label="db",
+        kind="module",
+        file_path="db.py",
+        docstring="Database layer",
+    )
+    G.add_node(
+        "db::class::Connection",
+        label="Connection",
+        kind="class",
+        file_path="db.py",
+        docstring="Database connection pool",
+    )
+    G.add_node(
+        "db::method::query", label="query", kind="method", file_path="db.py"
+    )
 
     # Edges
     G.add_edge("auth::module", "auth::class::AuthHandler", relation="defines")
-    G.add_edge("auth::class::AuthHandler", "auth::method::login", relation="defines")
-    G.add_edge("auth::class::AuthHandler", "auth::method::logout", relation="defines")
+    G.add_edge(
+        "auth::class::AuthHandler", "auth::method::login", relation="defines"
+    )
+    G.add_edge(
+        "auth::class::AuthHandler", "auth::method::logout", relation="defines"
+    )
     G.add_edge("db::module", "db::class::Connection", relation="defines")
     G.add_edge("db::class::Connection", "db::method::query", relation="defines")
     G.add_edge("auth::method::login", "db::method::query", relation="calls")
@@ -46,12 +80,20 @@ def _build_cluster_result():
     """Build a cluster result with two communities."""
     cr = ClusterResult(hierarchy_levels=1)
     cr.communities[0] = Community(
-        id=0, level=0, resolution=1.0,
-        node_ids=["auth::module", "auth::class::AuthHandler",
-                   "auth::method::login", "auth::method::logout"],
+        id=0,
+        level=0,
+        resolution=1.0,
+        node_ids=[
+            "auth::module",
+            "auth::class::AuthHandler",
+            "auth::method::login",
+            "auth::method::logout",
+        ],
     )
     cr.communities[1] = Community(
-        id=1, level=0, resolution=1.0,
+        id=1,
+        level=0,
+        resolution=1.0,
         node_ids=["db::module", "db::class::Connection", "db::method::query"],
     )
     return cr

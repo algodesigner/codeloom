@@ -49,14 +49,16 @@ def analyze(
     for node in G.nodes():
         d = degree.get(node, 0)
         p = pr.get(node, 0)
-        scored.append({
-            "id": node,
-            "label": G.nodes[node].get("label", node),
-            "kind": G.nodes[node].get("kind", ""),
-            "degree": d,
-            "pagerank": round(p, 6),
-            "score": d * p,
-        })
+        scored.append(
+            {
+                "id": node,
+                "label": G.nodes[node].get("label", node),
+                "kind": G.nodes[node].get("kind", ""),
+                "degree": d,
+                "pagerank": round(p, 6),
+                "score": d * p,
+            }
+        )
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     result.god_nodes = scored[:top_k]
@@ -91,16 +93,18 @@ def analyze(
         if u_file and v_file and u_file != v_file:
             conf = data.get("confidence", "EXTRACTED")
             if conf in ("INFERRED", "AMBIGUOUS"):
-                result.surprising_connections.append({
-                    "source": G.nodes[u].get("label", u),
-                    "target": G.nodes[v].get("label", v),
-                    "relation": data.get("relation", ""),
-                    "confidence": conf,
-                    "source_file": u_file,
-                    "target_file": v_file,
-                })
+                result.surprising_connections.append(
+                    {
+                        "source": G.nodes[u].get("label", u),
+                        "target": G.nodes[v].get("label", v),
+                        "relation": data.get("relation", ""),
+                        "confidence": conf,
+                        "source_file": u_file,
+                        "target_file": v_file,
+                    }
+                )
 
-    result.surprising_connections = result.surprising_connections[:top_k * 2]
+    result.surprising_connections = result.surprising_connections[: top_k * 2]
 
     # Quality metrics
     result.quality_metrics = _compute_quality(G)
@@ -127,8 +131,14 @@ def _compute_quality(G: nx.DiGraph) -> dict:
         "edges": total_edges,
         "density": round(nx.density(G), 6),
         "isolated_nodes": isolated,
-        "extracted_ratio": round(conf_counts["EXTRACTED"] / max(total_edges, 1), 4),
-        "inferred_ratio": round(conf_counts["INFERRED"] / max(total_edges, 1), 4),
-        "ambiguous_ratio": round(conf_counts["AMBIGUOUS"] / max(total_edges, 1), 4),
+        "extracted_ratio": round(
+            conf_counts["EXTRACTED"] / max(total_edges, 1), 4
+        ),
+        "inferred_ratio": round(
+            conf_counts["INFERRED"] / max(total_edges, 1), 4
+        ),
+        "ambiguous_ratio": round(
+            conf_counts["AMBIGUOUS"] / max(total_edges, 1), 4
+        ),
         "weakly_connected_components": nx.number_weakly_connected_components(G),
     }

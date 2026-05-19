@@ -41,7 +41,9 @@ class TestRRF:
         list2 = [("x", 0.8), ("z", 0.3)]
         list3 = [("x", 0.7), ("w", 0.6)]
         fused, breakdowns = reciprocal_rank_fusion(
-            list1, list2, list3,
+            list1,
+            list2,
+            list3,
             signal_names=["s1", "s2", "s3"],
         )
         assert fused[0][0] == "x"
@@ -76,12 +78,30 @@ class TestSearchResult:
 class TestSearchGraph:
     def test_graph_structure(self):
         nodes = [
-            SearchResult(node_id="a", label="a", kind="function",
-                         file_path="a.py", score=0.9, source="seed"),
-            SearchResult(node_id="b", label="b", kind="function",
-                         file_path="b.py", score=0.8, source="seed"),
-            SearchResult(node_id="m", label="m", kind="module",
-                         file_path="m.py", score=0.0, source="path"),
+            SearchResult(
+                node_id="a",
+                label="a",
+                kind="function",
+                file_path="a.py",
+                score=0.9,
+                source="seed",
+            ),
+            SearchResult(
+                node_id="b",
+                label="b",
+                kind="function",
+                file_path="b.py",
+                score=0.8,
+                source="seed",
+            ),
+            SearchResult(
+                node_id="m",
+                label="m",
+                kind="module",
+                file_path="m.py",
+                score=0.0,
+                source="path",
+            ),
         ]
         edges = [
             SearchEdge(source="a", target="m", relation="defines"),
@@ -100,19 +120,44 @@ class TestSearchGraphJson:
     def test_to_json_structure(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="mod:0", label="app", kind="module",
-                             file_path="app.py", score=0.5, source="seed",
-                             start_line=0),
-                SearchResult(node_id="app.py:10", label="run", kind="function",
-                             file_path="app.py", score=0.3, source="seed",
-                             start_line=10, signature="()",
-                             signal_contributions={"vector": 0.2}),
+                SearchResult(
+                    node_id="mod:0",
+                    label="app",
+                    kind="module",
+                    file_path="app.py",
+                    score=0.5,
+                    source="seed",
+                    start_line=0,
+                ),
+                SearchResult(
+                    node_id="app.py:10",
+                    label="run",
+                    kind="function",
+                    file_path="app.py",
+                    score=0.3,
+                    source="seed",
+                    start_line=10,
+                    signature="()",
+                    signal_contributions={"vector": 0.2},
+                ),
             ],
-            edges=[SearchEdge(source="mod:0", target="app.py:10", relation="defines")],
+            edges=[
+                SearchEdge(
+                    source="mod:0",
+                    target="app.py:10",
+                    relation="defines",
+                ),
+            ],
             isolated=[
-                SearchResult(node_id="old.py:5", label="old_func", kind="function",
-                             file_path="old.py", score=0.1, source="seed",
-                             start_line=5),
+                SearchResult(
+                    node_id="old.py:5",
+                    label="old_func",
+                    kind="function",
+                    file_path="old.py",
+                    score=0.1,
+                    source="seed",
+                    start_line=5,
+                ),
             ],
         )
         j = sg.to_json()
@@ -124,12 +169,20 @@ class TestSearchGraphJson:
     def test_to_json_seed_fields(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="app.py:10", label="run", kind="function",
-                             file_path="app.py", score=0.3, source="seed",
-                             start_line=10, signature="()",
-                             signal_contributions={"vector": 0.2}),
+                SearchResult(
+                    node_id="app.py:10",
+                    label="run",
+                    kind="function",
+                    file_path="app.py",
+                    score=0.3,
+                    source="seed",
+                    start_line=10,
+                    signature="()",
+                    signal_contributions={"vector": 0.2},
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         seed = sg.to_json()["seeds"][0]
         assert seed["id"] == "app.py:10"
@@ -143,8 +196,15 @@ class TestSearchGraphJson:
 
     def test_to_json_edge_fields(self):
         sg = SearchGraph(
-            nodes=[], isolated=[],
-            edges=[SearchEdge(source="a.py:1", target="b.py:2", relation="calls")],
+            nodes=[],
+            isolated=[],
+            edges=[
+                SearchEdge(
+                    source="a.py:1",
+                    target="b.py:2",
+                    relation="calls",
+                ),
+            ],
         )
         edge = sg.to_json()["edges"][0]
         assert edge["from"] == "a.py:1"
@@ -154,15 +214,42 @@ class TestSearchGraphJson:
     def test_to_json_isolated_separate(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="a", kind="function",
-                             file_path="a.py", score=0.5, source="seed", start_line=1),
-                SearchResult(node_id="b.py:1", label="b", kind="function",
-                             file_path="b.py", score=0.1, source="seed", start_line=1),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="a",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    start_line=1,
+                ),
+                SearchResult(
+                    node_id="b.py:1",
+                    label="b",
+                    kind="function",
+                    file_path="b.py",
+                    score=0.1,
+                    source="seed",
+                    start_line=1,
+                ),
             ],
-            edges=[SearchEdge(source="a.py:1", target="b.py:1", relation="calls")],
+            edges=[
+                SearchEdge(
+                    source="a.py:1",
+                    target="b.py:1",
+                    relation="calls",
+                ),
+            ],
             isolated=[
-                SearchResult(node_id="c.py:1", label="c", kind="function",
-                             file_path="c.py", score=0.05, source="seed", start_line=1),
+                SearchResult(
+                    node_id="c.py:1",
+                    label="c",
+                    kind="function",
+                    file_path="c.py",
+                    score=0.05,
+                    source="seed",
+                    start_line=1,
+                ),
             ],
         )
         j = sg.to_json()
@@ -173,11 +260,18 @@ class TestSearchGraphJson:
     def test_to_json_strips_source_dir(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="/project/app.py:10", label="run", kind="function",
-                             file_path="/project/app.py", score=0.5, source="seed",
-                             start_line=10),
+                SearchResult(
+                    node_id="/project/app.py:10",
+                    label="run",
+                    kind="function",
+                    file_path="/project/app.py",
+                    score=0.5,
+                    source="seed",
+                    start_line=10,
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         j = sg.to_json(source_dir="/project/")
         assert j["seeds"][0]["id"] == "app.py:10"
@@ -197,11 +291,21 @@ class TestValidateKinds:
 
 class TestGenerateFilterHint:
     def test_no_hint_when_filter_applied(self):
-        hint = _generate_filter_hint([], kind_filter="function", file_filter=None, top_k=10)
+        hint = _generate_filter_hint(
+            [],
+            kind_filter="function",
+            file_filter=None,
+            top_k=10,
+        )
         assert hint == ""
 
     def test_no_hint_when_few_results(self):
-        hint = _generate_filter_hint([], kind_filter=None, file_filter=None, top_k=10)
+        hint = _generate_filter_hint(
+            [],
+            kind_filter=None,
+            file_filter=None,
+            top_k=10,
+        )
         assert hint == ""
 
     def test_hint_when_kind_dominates(self):
@@ -214,7 +318,12 @@ class TestGenerateFilterHint:
             ("a:6", 0.1, {"kind": "function"}),
             ("a:7", 0.1, {"kind": "class"}),
         ]
-        hint = _generate_filter_hint(seed_nodes, kind_filter=None, file_filter=None, top_k=10)
+        hint = _generate_filter_hint(
+            seed_nodes,
+            kind_filter=None,
+            file_filter=None,
+            top_k=10,
+        )
         assert hint is not None
         assert "function" in hint
         assert "--kind" in hint
@@ -229,7 +338,12 @@ class TestGenerateFilterHint:
             ("a:6", 0.1, {"kind": "section"}),
             ("a:7", 0.1, {"kind": "struct"}),
         ]
-        hint = _generate_filter_hint(seed_nodes, kind_filter=None, file_filter=None, top_k=10)
+        hint = _generate_filter_hint(
+            seed_nodes,
+            kind_filter=None,
+            file_filter=None,
+            top_k=10,
+        )
         assert hint == ""
 
 
@@ -251,10 +365,11 @@ class TestSearchGraphHint:
 
 
 class TestHybridSearchFiltering:
-    """Test hybrid_search with kind and file_pattern filters using mocked store."""
+    """hybrid_search with kind and file_pattern filters (mocked store)."""
 
     def _clear(self):
         from codeloom.query.hybrid import clear_search_cache
+
         clear_search_cache()
 
     def test_filters_by_kind(self, tmp_path):
@@ -264,12 +379,34 @@ class TestHybridSearchFiltering:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py", label="fn", start_line=1)
-        G.add_node("b.py:1", kind="class", file_path="b.py", label="Cls", start_line=1)
-        G.add_node("c.py:1", kind="method", file_path="c.py", label="meth", start_line=1)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=1,
+        )
+        G.add_node(
+            "b.py:1",
+            kind="class",
+            file_path="b.py",
+            label="Cls",
+            start_line=1,
+        )
+        G.add_node(
+            "c.py:1",
+            kind="method",
+            file_path="c.py",
+            label="meth",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
-        mock_store.vector_search.return_value = [("a.py:1", 0.9), ("b.py:1", 0.5), ("c.py:1", 0.3)]
+        mock_store.vector_search.return_value = [
+            ("a.py:1", 0.9),
+            ("b.py:1", 0.5),
+            ("c.py:1", 0.3),
+        ]
         mock_store.keyword_search.return_value = []
         mock_store.community_search.return_value = []
 
@@ -277,7 +414,14 @@ class TestHybridSearchFiltering:
             mock_eq.return_value = {"code": None, "text": None}
 
             from codeloom.query.hybrid import hybrid_search
-            result = hybrid_search("test", mock_store, G, top_k=10, kind="function")
+
+            result = hybrid_search(
+                "test",
+                mock_store,
+                G,
+                top_k=10,
+                kind="function",
+            )
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "a.py:1" in seed_ids
             assert "b.py:1" not in seed_ids
@@ -290,12 +434,27 @@ class TestHybridSearchFiltering:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/api/handler.py:1", kind="function", file_path="src/api/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("src/db/pool.py:1", kind="function", file_path="src/db/pool.py",
-                    label="connect", start_line=1)
-        G.add_node("tests/test_api.py:1", kind="function", file_path="tests/test_api.py",
-                    label="test_handle", start_line=1)
+        G.add_node(
+            "src/api/handler.py:1",
+            kind="function",
+            file_path="src/api/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "src/db/pool.py:1",
+            kind="function",
+            file_path="src/db/pool.py",
+            label="connect",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_api.py:1",
+            kind="function",
+            file_path="tests/test_api.py",
+            label="test_handle",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -310,7 +469,14 @@ class TestHybridSearchFiltering:
             mock_eq.return_value = {"code": None, "text": None}
 
             from codeloom.query.hybrid import hybrid_search
-            result = hybrid_search("api", mock_store, G, top_k=10, file_pattern="src/api/*")
+
+            result = hybrid_search(
+                "api",
+                mock_store,
+                G,
+                top_k=10,
+                file_pattern="src/api/*",
+            )
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "src/api/handler.py:1" in seed_ids
             assert "src/db/pool.py:1" not in seed_ids
@@ -323,10 +489,20 @@ class TestHybridSearchFiltering:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/api/handler.py:1", kind="function", file_path="src/api/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("src/api/types.py:1", kind="class", file_path="src/api/types.py",
-                    label="RequestType", start_line=1)
+        G.add_node(
+            "src/api/handler.py:1",
+            kind="function",
+            file_path="src/api/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "src/api/types.py:1",
+            kind="class",
+            file_path="src/api/types.py",
+            label="RequestType",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -340,8 +516,15 @@ class TestHybridSearchFiltering:
             mock_eq.return_value = {"code": None, "text": None}
 
             from codeloom.query.hybrid import hybrid_search
-            result = hybrid_search("api", mock_store, G, top_k=10,
-                                    kind="function", file_pattern="src/api/*")
+
+            result = hybrid_search(
+                "api",
+                mock_store,
+                G,
+                top_k=10,
+                kind="function",
+                file_pattern="src/api/*",
+            )
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "src/api/handler.py:1" in seed_ids
             assert "src/api/types.py:1" not in seed_ids
@@ -353,7 +536,13 @@ class TestHybridSearchFiltering:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py", label="fn", start_line=1)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [("a.py:1", 0.9)]
@@ -364,7 +553,14 @@ class TestHybridSearchFiltering:
             mock_eq.return_value = {"code": None, "text": None}
 
             from codeloom.query.hybrid import hybrid_search
-            result = hybrid_search("test", mock_store, G, top_k=10, kind="class")
+
+            result = hybrid_search(
+                "test",
+                mock_store,
+                G,
+                top_k=10,
+                kind="class",
+            )
             seeds = [n for n in result.nodes if n.source == "seed"]
             assert len(seeds) == 0
 
@@ -376,9 +572,20 @@ class TestHybridSearchFiltering:
 
         G = nx.DiGraph()
         for i in range(6):
-            G.add_node(f"a.py:{i}", kind="function", file_path="a.py",
-                        label=f"fn{i}", start_line=i)
-        G.add_node("b.py:1", kind="class", file_path="b.py", label="Cls", start_line=1)
+            G.add_node(
+                f"a.py:{i}",
+                kind="function",
+                file_path="a.py",
+                label=f"fn{i}",
+                start_line=i,
+            )
+        G.add_node(
+            "b.py:1",
+            kind="class",
+            file_path="b.py",
+            label="Cls",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -393,18 +600,30 @@ class TestHybridSearchFiltering:
             mock_eq.return_value = {"code": None, "text": None}
 
             from codeloom.query.hybrid import hybrid_search
+
             clear_search_cache()
 
             # No kind filter -> hint should suggest function
-            result = hybrid_search("find functions", mock_store, G, top_k=10, kind=None)
+            result = hybrid_search(
+                "find functions",
+                mock_store,
+                G,
+                top_k=10,
+                kind=None,
+            )
             assert result.hint != ""
             assert "function" in result.hint
 
             clear_search_cache()
 
             # With kind filter -> no hint
-            result2 = hybrid_search("find functions filtered", mock_store, G,
-                                     top_k=10, kind="function")
+            result2 = hybrid_search(
+                "find functions filtered",
+                mock_store,
+                G,
+                top_k=10,
+                kind="function",
+            )
             assert result2.hint == ""
 
 
@@ -555,60 +774,72 @@ class TestGenerateSourceTestHint:
         return ("id", 0.5, {"file_path": file_path, "kind": kind})
 
     def test_all_source_no_hint(self):
-        hint = _generate_source_test_hint([
-            self._node("src/a.py"),
-            self._node("src/b.py"),
-            self._node("src/c.py"),
-            self._node("src/d.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("src/a.py"),
+                self._node("src/b.py"),
+                self._node("src/c.py"),
+                self._node("src/d.py"),
+            ]
+        )
         assert hint == ""
 
     def test_all_tests_no_hint(self):
-        hint = _generate_source_test_hint([
-            self._node("tests/test_a.py"),
-            self._node("tests/test_b.py"),
-            self._node("tests/test_c.py"),
-            self._node("tests/test_d.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("tests/test_a.py"),
+                self._node("tests/test_b.py"),
+                self._node("tests/test_c.py"),
+                self._node("tests/test_d.py"),
+            ]
+        )
         assert hint == ""
 
     def test_too_few_results_no_hint(self):
-        hint = _generate_source_test_hint([
-            self._node("src/a.py"),
-            self._node("tests/test_a.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("src/a.py"),
+                self._node("tests/test_a.py"),
+            ]
+        )
         assert hint == ""
 
     def test_tests_dominate(self):
-        hint = _generate_source_test_hint([
-            self._node("src/a.py"),
-            self._node("tests/test_a.py"),
-            self._node("tests/test_b.py"),
-            self._node("tests/test_c.py"),
-            self._node("tests/test_d.py"),
-            self._node("tests/test_e.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("src/a.py"),
+                self._node("tests/test_a.py"),
+                self._node("tests/test_b.py"),
+                self._node("tests/test_c.py"),
+                self._node("tests/test_d.py"),
+                self._node("tests/test_e.py"),
+            ]
+        )
         assert "test" in hint.lower()
         assert hint != ""
 
     def test_sources_dominate(self):
-        hint = _generate_source_test_hint([
-            self._node("src/a.py"),
-            self._node("src/b.py"),
-            self._node("src/c.py"),
-            self._node("src/d.py"),
-            self._node("tests/test_a.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("src/a.py"),
+                self._node("src/b.py"),
+                self._node("src/c.py"),
+                self._node("src/d.py"),
+                self._node("tests/test_a.py"),
+            ]
+        )
         assert "source" in hint.lower()
         assert hint != ""
 
     def test_equal_split(self):
-        hint = _generate_source_test_hint([
-            self._node("src/a.py"),
-            self._node("src/b.py"),
-            self._node("tests/test_a.py"),
-            self._node("tests/test_b.py"),
-        ])
+        hint = _generate_source_test_hint(
+            [
+                self._node("src/a.py"),
+                self._node("src/b.py"),
+                self._node("tests/test_a.py"),
+                self._node("tests/test_b.py"),
+            ]
+        )
         assert "source" in hint.lower()
         assert hint != ""
 
@@ -618,6 +849,7 @@ class TestHybridSearchTestPenalty:
 
     def _clear(self):
         from codeloom.query.hybrid import clear_search_cache
+
         clear_search_cache()
 
     def test_penalise_tests_demotes_test_files(self, tmp_path):
@@ -627,12 +859,27 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/handler.py:1", kind="function", file_path="src/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("tests/test_handler.py:1", kind="function",
-                    file_path="tests/test_handler.py", label="test_handle", start_line=1)
-        G.add_node("tests/test_utils.py:1", kind="function",
-                    file_path="tests/test_utils.py", label="test_utils", start_line=1)
+        G.add_node(
+            "src/handler.py:1",
+            kind="function",
+            file_path="src/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_handler.py:1",
+            kind="function",
+            file_path="tests/test_handler.py",
+            label="test_handle",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_utils.py:1",
+            kind="function",
+            file_path="tests/test_utils.py",
+            label="test_utils",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -649,11 +896,16 @@ class TestHybridSearchTestPenalty:
             from codeloom.query.hybrid import hybrid_search
 
             # With penalty (default)
-            result = hybrid_search("handler", mock_store, G, top_k=10,
-                                    penalise_tests=True)
+            result = hybrid_search(
+                "handler",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=True,
+            )
             all_seeds = [n for n in result.nodes if n.source == "seed"]
             all_seeds += [n for n in result.isolated if n.source == "seed"]
-            # Source file should rank higher than tests despite lower initial score
+            # Source file ranks higher than tests despite lower score
             assert all_seeds[0].node_id == "src/handler.py:1"
 
     def test_penalise_tests_disabled(self, tmp_path):
@@ -663,10 +915,20 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/handler.py:1", kind="function", file_path="src/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("tests/test_handler.py:1", kind="function",
-                    file_path="tests/test_handler.py", label="test_handle", start_line=1)
+        G.add_node(
+            "src/handler.py:1",
+            kind="function",
+            file_path="src/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_handler.py:1",
+            kind="function",
+            file_path="tests/test_handler.py",
+            label="test_handle",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -682,8 +944,13 @@ class TestHybridSearchTestPenalty:
             from codeloom.query.hybrid import hybrid_search
 
             # Without penalty — test retains its higher rank
-            result = hybrid_search("handler", mock_store, G, top_k=10,
-                                    penalise_tests=False)
+            result = hybrid_search(
+                "handler",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=False,
+            )
             all_seeds = [n for n in result.nodes if n.source == "seed"]
             all_seeds += [n for n in result.isolated if n.source == "seed"]
             assert all_seeds[0].node_id == "tests/test_handler.py:1"
@@ -696,8 +963,13 @@ class TestHybridSearchTestPenalty:
 
         G = nx.DiGraph()
         for i in range(11):
-            G.add_node(f"tests/test_{i}.py:{i}", kind="function",
-                        file_path=f"tests/test_{i}.py", label=f"test_{i}", start_line=i)
+            G.add_node(
+                f"tests/test_{i}.py:{i}",
+                kind="function",
+                file_path=f"tests/test_{i}.py",
+                label=f"test_{i}",
+                start_line=i,
+            )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -711,11 +983,16 @@ class TestHybridSearchTestPenalty:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("test", mock_store, G, top_k=5,
-                                    penalise_tests=True)
+            result = hybrid_search(
+                "test",
+                mock_store,
+                G,
+                top_k=5,
+                penalise_tests=True,
+            )
             seeds = [n for n in result.nodes if n.source == "seed"]
             assert len(seeds) <= 5
-            # All results are test files; penalty still applies but all are tests
+            # All results tests; penalty applies but all are tests
             for s in seeds:
                 assert s.file_path.startswith("tests/")
 
@@ -727,11 +1004,21 @@ class TestHybridSearchTestPenalty:
 
         G = nx.DiGraph()
         # 1 source, 5 test files — tests dominate
-        G.add_node("src/handler.py:1", kind="function", file_path="src/handler.py",
-                    label="handle", start_line=1)
+        G.add_node(
+            "src/handler.py:1",
+            kind="function",
+            file_path="src/handler.py",
+            label="handle",
+            start_line=1,
+        )
         for i in range(5):
-            G.add_node(f"tests/test_{i}.py:{i}", kind="function",
-                        file_path=f"tests/test_{i}.py", label=f"test_{i}", start_line=i)
+            G.add_node(
+                f"tests/test_{i}.py:{i}",
+                kind="function",
+                file_path=f"tests/test_{i}.py",
+                label=f"test_{i}",
+                start_line=i,
+            )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -745,8 +1032,13 @@ class TestHybridSearchTestPenalty:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("find", mock_store, G, top_k=10,
-                                    penalise_tests=True)
+            result = hybrid_search(
+                "find",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=True,
+            )
             # Should include a hint about test/source mix
             assert "test" in result.hint.lower()
 
@@ -757,11 +1049,21 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/handler.py:1", kind="function", file_path="src/handler.py",
-                    label="handle", start_line=1)
+        G.add_node(
+            "src/handler.py:1",
+            kind="function",
+            file_path="src/handler.py",
+            label="handle",
+            start_line=1,
+        )
         for i in range(5):
-            G.add_node(f"tests/test_{i}.py:{i}", kind="function",
-                        file_path=f"tests/test_{i}.py", label=f"test_{i}", start_line=i)
+            G.add_node(
+                f"tests/test_{i}.py:{i}",
+                kind="function",
+                file_path=f"tests/test_{i}.py",
+                label=f"test_{i}",
+                start_line=i,
+            )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -776,8 +1078,13 @@ class TestHybridSearchTestPenalty:
             from codeloom.query.hybrid import hybrid_search
 
             # Without penalty — no source/test hint generated
-            result = hybrid_search("find", mock_store, G, top_k=10,
-                                    penalise_tests=False)
+            result = hybrid_search(
+                "find",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=False,
+            )
             assert "test" not in result.hint.lower()
 
     def test_penalty_factor_is_0_3(self):
@@ -790,14 +1097,34 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("tests/test_a.py:1", kind="function",
-                    file_path="tests/test_a.py", label="test_a", start_line=1)
-        G.add_node("tests/test_b.py:1", kind="function",
-                    file_path="tests/test_b.py", label="test_b", start_line=1)
-        G.add_node("tests/test_c.py:1", kind="function",
-                    file_path="tests/test_c.py", label="test_c", start_line=1)
-        G.add_node("src/real.py:1", kind="function",
-                    file_path="src/real.py", label="real", start_line=1)
+        G.add_node(
+            "tests/test_a.py:1",
+            kind="function",
+            file_path="tests/test_a.py",
+            label="test_a",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_b.py:1",
+            kind="function",
+            file_path="tests/test_b.py",
+            label="test_b",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_c.py:1",
+            kind="function",
+            file_path="tests/test_c.py",
+            label="test_c",
+            start_line=1,
+        )
+        G.add_node(
+            "src/real.py:1",
+            kind="function",
+            file_path="src/real.py",
+            label="real",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -814,8 +1141,9 @@ class TestHybridSearchTestPenalty:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("target", mock_store, G, top_k=10,
-                                    penalise_tests=True)
+            result = hybrid_search(
+                "target", mock_store, G, top_k=10, penalise_tests=True
+            )
             all_seeds = [n for n in result.nodes if n.source == "seed"]
             all_seeds += [n for n in result.isolated if n.source == "seed"]
             seed_ids = {n.node_id for n in all_seeds}
@@ -831,10 +1159,20 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/handler.py:1", kind="function", file_path="src/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("tests/test_handler.py:1", kind="class",
-                    file_path="tests/test_handler.py", label="TestHandler", start_line=1)
+        G.add_node(
+            "src/handler.py:1",
+            kind="function",
+            file_path="src/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_handler.py:1",
+            kind="class",
+            file_path="tests/test_handler.py",
+            label="TestHandler",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -849,9 +1187,15 @@ class TestHybridSearchTestPenalty:
 
             from codeloom.query.hybrid import hybrid_search
 
-            # Filter by kind=function — test file is a class, should be excluded
-            result = hybrid_search("handler", mock_store, G, top_k=10,
-                                    penalise_tests=True, kind="function")
+            # Filter by kind=function — test file is class, excluded
+            result = hybrid_search(
+                "handler",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=True,
+                kind="function",
+            )
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "src/handler.py:1" in seed_ids
             assert "tests/test_handler.py:1" not in seed_ids
@@ -863,10 +1207,20 @@ class TestHybridSearchTestPenalty:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("src/api/handler.py:1", kind="function", file_path="src/api/handler.py",
-                    label="handle", start_line=1)
-        G.add_node("tests/test_api.py:1", kind="function",
-                    file_path="tests/test_api.py", label="test_api", start_line=1)
+        G.add_node(
+            "src/api/handler.py:1",
+            kind="function",
+            file_path="src/api/handler.py",
+            label="handle",
+            start_line=1,
+        )
+        G.add_node(
+            "tests/test_api.py:1",
+            kind="function",
+            file_path="tests/test_api.py",
+            label="test_api",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -882,8 +1236,14 @@ class TestHybridSearchTestPenalty:
             from codeloom.query.hybrid import hybrid_search
 
             # File filter excludes test file entirely
-            result = hybrid_search("api", mock_store, G, top_k=10,
-                                    penalise_tests=True, file_pattern="src/api/*")
+            result = hybrid_search(
+                "api",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=True,
+                file_pattern="src/api/*",
+            )
             seed_ids = {n.node_id for n in result.nodes if n.source == "seed"}
             assert "src/api/handler.py:1" in seed_ids
             assert "tests/test_api.py:1" not in seed_ids
@@ -968,15 +1328,23 @@ class TestSearchResultWithSnippet:
 
     def test_default_is_empty_string(self):
         sr = SearchResult(
-            node_id="a.py:1", label="fn", kind="function",
-            file_path="a.py", score=0.5, source="seed",
+            node_id="a.py:1",
+            label="fn",
+            kind="function",
+            file_path="a.py",
+            score=0.5,
+            source="seed",
         )
         assert sr.context_snippet == ""
 
     def test_snippet_preserved(self):
         sr = SearchResult(
-            node_id="a.py:1", label="fn", kind="function",
-            file_path="a.py", score=0.5, source="seed",
+            node_id="a.py:1",
+            label="fn",
+            kind="function",
+            file_path="a.py",
+            score=0.5,
+            source="seed",
             context_snippet="def fn():\n    pass",
         )
         assert sr.context_snippet == "def fn():\n    pass"
@@ -984,12 +1352,19 @@ class TestSearchResultWithSnippet:
     def test_snippet_in_json_output(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="fn", kind="function",
-                             file_path="a.py", score=0.5, source="seed",
-                             start_line=1,
-                             context_snippet="def fn():\n    pass"),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="fn",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    start_line=1,
+                    context_snippet="def fn():\n    pass",
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         seed = sg.to_json()["seeds"][0]
         assert seed["snippet"] == "def fn():\n    pass"
@@ -997,11 +1372,19 @@ class TestSearchResultWithSnippet:
     def test_omits_snippet_key_when_empty(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="fn", kind="function",
-                             file_path="a.py", score=0.5, source="seed",
-                             start_line=1, context_snippet=""),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="fn",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    start_line=1,
+                    context_snippet="",
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         seed = sg.to_json()["seeds"][0]
         assert "snippet" not in seed
@@ -1013,11 +1396,18 @@ class TestSearchGraphSnippetOutput:
     def test_to_text_shows_snippet_with_pipe_prefix(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="fn", kind="function",
-                             file_path="a.py", score=0.5, source="seed",
-                             context_snippet="def fn():\n    pass"),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="fn",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    context_snippet="def fn():\n    pass",
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         text = sg.to_text()
         assert "def fn()" in text
@@ -1027,11 +1417,18 @@ class TestSearchGraphSnippetOutput:
     def test_to_text_without_snippet_stays_clean(self):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="fn", kind="function",
-                             file_path="a.py", score=0.5, source="seed",
-                             context_snippet=""),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="fn",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    context_snippet="",
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         text = sg.to_text()
         assert "a.py:1" in text
@@ -1040,11 +1437,18 @@ class TestSearchGraphSnippetOutput:
     def test_to_text_multiline_snippet(self, tmp_path):
         sg = SearchGraph(
             nodes=[
-                SearchResult(node_id="a.py:1", label="fn", kind="function",
-                             file_path="a.py", score=0.5, source="seed",
-                             context_snippet="line1\nline2\nline3"),
+                SearchResult(
+                    node_id="a.py:1",
+                    label="fn",
+                    kind="function",
+                    file_path="a.py",
+                    score=0.5,
+                    source="seed",
+                    context_snippet="line1\nline2\nline3",
+                ),
             ],
-            edges=[], isolated=[],
+            edges=[],
+            isolated=[],
         )
         text = sg.to_text()
         lines = text.split("\n")
@@ -1059,6 +1463,7 @@ class TestHybridSearchSnippets:
 
     def _clear(self):
         from codeloom.query.hybrid import clear_search_cache
+
         clear_search_cache()
 
     def _write_file(self, path, content):
@@ -1071,11 +1476,19 @@ class TestHybridSearchSnippets:
 
         import networkx as nx
 
-        self._write_file(tmp_path / "src" / "a.py", "def foo():\n    return 1\n")
+        self._write_file(
+            tmp_path / "src" / "a.py",
+            "def foo():\n    return 1\n",
+        )
 
         G = nx.DiGraph()
-        G.add_node(str(tmp_path / "src/a.py:1"), kind="function",
-                    file_path=str(tmp_path / "src/a.py"), label="foo", start_line=1)
+        G.add_node(
+            str(tmp_path / "src/a.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "src/a.py"),
+            label="foo",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1089,7 +1502,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("foo", mock_store, G, top_k=10, snippet_count=0)
+            result = hybrid_search(
+                "foo",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=0,
+            )
             for node in result.nodes:
                 if node.source == "seed":
                     assert node.context_snippet == ""
@@ -1106,14 +1525,34 @@ class TestHybridSearchSnippets:
         self._write_file(tmp_path / "d.py", "def four():\n    return 4\n")
 
         G = nx.DiGraph()
-        G.add_node(str(tmp_path / "a.py:1"), kind="function",
-                    file_path=str(tmp_path / "a.py"), label="one", start_line=1)
-        G.add_node(str(tmp_path / "b.py:1"), kind="function",
-                    file_path=str(tmp_path / "b.py"), label="two", start_line=1)
-        G.add_node(str(tmp_path / "c.py:1"), kind="function",
-                    file_path=str(tmp_path / "c.py"), label="three", start_line=1)
-        G.add_node(str(tmp_path / "d.py:1"), kind="function",
-                    file_path=str(tmp_path / "d.py"), label="four", start_line=1)
+        G.add_node(
+            str(tmp_path / "a.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "a.py"),
+            label="one",
+            start_line=1,
+        )
+        G.add_node(
+            str(tmp_path / "b.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "b.py"),
+            label="two",
+            start_line=1,
+        )
+        G.add_node(
+            str(tmp_path / "c.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "c.py"),
+            label="three",
+            start_line=1,
+        )
+        G.add_node(
+            str(tmp_path / "d.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "d.py"),
+            label="four",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1130,7 +1569,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("functions", mock_store, G, top_k=10, snippet_count=3)
+            result = hybrid_search(
+                "functions",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=3,
+            )
             all_seeds = [n for n in result.nodes if n.source == "seed"]
             all_seeds += [n for n in result.isolated if n.source == "seed"]
             populated = [s for s in all_seeds if s.context_snippet]
@@ -1149,8 +1594,13 @@ class TestHybridSearchSnippets:
         self._write_file(tmp_path / "a.py", "def one():\n    return 1\n")
 
         G = nx.DiGraph()
-        G.add_node(str(tmp_path / "a.py:1"), kind="function",
-                    file_path=str(tmp_path / "a.py"), label="one", start_line=1)
+        G.add_node(
+            str(tmp_path / "a.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "a.py"),
+            label="one",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1164,7 +1614,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("one", mock_store, G, top_k=10, snippet_count=5)
+            result = hybrid_search(
+                "one",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=5,
+            )
             seeds = [n for n in result.nodes if n.source == "seed"]
             # Should populate the only available seed
             assert len(seeds) == 1
@@ -1182,10 +1638,20 @@ class TestHybridSearchSnippets:
         G = nx.DiGraph()
         a = str(tmp_path / "a.py:1")
         b = str(tmp_path / "b.py:1")
-        G.add_node(a, kind="function", file_path=str(tmp_path / "a.py"),
-                    label="a_fn", start_line=1)
-        G.add_node(b, kind="function", file_path=str(tmp_path / "b.py"),
-                    label="b_fn", start_line=1)
+        G.add_node(
+            a,
+            kind="function",
+            file_path=str(tmp_path / "a.py"),
+            label="a_fn",
+            start_line=1,
+        )
+        G.add_node(
+            b,
+            kind="function",
+            file_path=str(tmp_path / "b.py"),
+            label="b_fn",
+            start_line=1,
+        )
         G.add_edge(a, b, relation="calls")
 
         mock_store = MagicMock()
@@ -1201,7 +1667,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("functions", mock_store, G, top_k=10, snippet_count=5)
+            result = hybrid_search(
+                "functions",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=5,
+            )
             for node in result.nodes:
                 if node.source == "path":
                     assert node.context_snippet == ""
@@ -1215,8 +1687,13 @@ class TestHybridSearchSnippets:
         self._write_file(tmp_path / "a.py", "def foo():\n    pass\n")
 
         G = nx.DiGraph()
-        G.add_node(str(tmp_path / "a.py:1"), kind="function",
-                    file_path=str(tmp_path / "a.py"), label="foo", start_line=1)
+        G.add_node(
+            str(tmp_path / "a.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "a.py"),
+            label="foo",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1230,7 +1707,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("foo", mock_store, G, top_k=10, snippet_count=3)
+            result = hybrid_search(
+                "foo",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=3,
+            )
             text = result.to_text()
             assert "  │ def foo()" in text
             assert "  │     pass" in text
@@ -1242,8 +1725,13 @@ class TestHybridSearchSnippets:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node(str(tmp_path / "missing.py:1"), kind="function",
-                    file_path=str(tmp_path / "missing.py"), label="gone", start_line=1)
+        G.add_node(
+            str(tmp_path / "missing.py:1"),
+            kind="function",
+            file_path=str(tmp_path / "missing.py"),
+            label="gone",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1257,7 +1745,13 @@ class TestHybridSearchSnippets:
 
             from codeloom.query.hybrid import hybrid_search
 
-            result = hybrid_search("gone", mock_store, G, top_k=10, snippet_count=3)
+            result = hybrid_search(
+                "gone",
+                mock_store,
+                G,
+                top_k=10,
+                snippet_count=3,
+            )
             seeds = [n for n in result.nodes if n.source == "seed"]
             assert len(seeds) == 1
             assert seeds[0].context_snippet == ""
@@ -1267,10 +1761,22 @@ class TestCacheKey:
     """Tests for cache key parameterisation."""
 
     def test_same_query_same_params_same_key(self):
-        k1 = _cache_key("foo", 30, penalise_tests=True, snippet_count=3,
-                         kind=None, file_pattern=None)
-        k2 = _cache_key("foo", 30, penalise_tests=True, snippet_count=3,
-                         kind=None, file_pattern=None)
+        k1 = _cache_key(
+            "foo",
+            30,
+            penalise_tests=True,
+            snippet_count=3,
+            kind=None,
+            file_pattern=None,
+        )
+        k2 = _cache_key(
+            "foo",
+            30,
+            penalise_tests=True,
+            snippet_count=3,
+            kind=None,
+            file_pattern=None,
+        )
         assert k1 == k2
 
     def test_different_top_k_different_key(self):
@@ -1300,8 +1806,14 @@ class TestCacheKey:
 
     def test_defaults_produce_same_key(self):
         k1 = _cache_key("foo", 30)
-        k2 = _cache_key("foo", 30, penalise_tests=True, snippet_count=0,
-                         kind=None, file_pattern=None)
+        k2 = _cache_key(
+            "foo",
+            30,
+            penalise_tests=True,
+            snippet_count=0,
+            kind=None,
+            file_pattern=None,
+        )
         assert k1 == k2
 
     def test_different_query_different_key(self):
@@ -1311,7 +1823,7 @@ class TestCacheKey:
 
 
 class TestHybridSearchCacheNotStale:
-    """Integration test: different filter/flag combos get different cache entries."""
+    """Integration test: different filter/flag combos get different caches."""
 
     def _clear(self):
         clear_search_cache()
@@ -1323,10 +1835,20 @@ class TestHybridSearchCacheNotStale:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("tests/a.py:1", kind="function", file_path="tests/a.py",
-                    label="fn", start_line=1)
-        G.add_node("src/a.py:1", kind="function", file_path="src/a.py",
-                    label="fn", start_line=1)
+        G.add_node(
+            "tests/a.py:1",
+            kind="function",
+            file_path="tests/a.py",
+            label="fn",
+            start_line=1,
+        )
+        G.add_node(
+            "src/a.py:1",
+            kind="function",
+            file_path="src/a.py",
+            label="fn",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1342,11 +1864,23 @@ class TestHybridSearchCacheNotStale:
             from codeloom.query.hybrid import hybrid_search
 
             # First call — penalties ON
-            r1 = hybrid_search("fn", mock_store, G, top_k=10,
-                                penalise_tests=True, use_cache=True)
+            r1 = hybrid_search(
+                "fn",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=True,
+                use_cache=True,
+            )
             # Second call — penalties OFF, must NOT get cached r1
-            r2 = hybrid_search("fn", mock_store, G, top_k=10,
-                                penalise_tests=False, use_cache=True)
+            r2 = hybrid_search(
+                "fn",
+                mock_store,
+                G,
+                top_k=10,
+                penalise_tests=False,
+                use_cache=True,
+            )
             # With penalties ON, src beats tests (source files rank first)
             seeds1 = [n for n in r1.nodes if n.source == "seed"]
             seeds1 += [n for n in r1.isolated if n.source == "seed"]
@@ -1368,8 +1902,13 @@ class TestHybridSearchCacheNotStale:
         a_path.write_text("def fn():\n    return 1\n")
 
         G = nx.DiGraph()
-        G.add_node(str(a_path) + ":1", kind="function",
-                    file_path=str(a_path), label="fn", start_line=1)
+        G.add_node(
+            str(a_path) + ":1",
+            kind="function",
+            file_path=str(a_path),
+            label="fn",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [(str(a_path) + ":1", 0.9)]
@@ -1382,11 +1921,13 @@ class TestHybridSearchCacheNotStale:
             from codeloom.query.hybrid import hybrid_search
 
             # First call — snippets on
-            r1 = hybrid_search("fn", mock_store, G, top_k=10,
-                                snippet_count=3, use_cache=True)
+            r1 = hybrid_search(
+                "fn", mock_store, G, top_k=10, snippet_count=3, use_cache=True
+            )
             # Second call — snippets off, must NOT get cached r1 with snippets
-            r2 = hybrid_search("fn", mock_store, G, top_k=10,
-                                snippet_count=0, use_cache=True)
+            r2 = hybrid_search(
+                "fn", mock_store, G, top_k=10, snippet_count=0, use_cache=True
+            )
 
             seeds1 = [n for n in r1.nodes if n.source == "seed"]
             seeds1 += [n for n in r1.isolated if n.source == "seed"]
@@ -1403,8 +1944,20 @@ class TestHybridSearchCacheNotStale:
         import networkx as nx
 
         G = nx.DiGraph()
-        G.add_node("a.py:1", kind="function", file_path="a.py", label="fn", start_line=1)
-        G.add_node("b.py:1", kind="class", file_path="b.py", label="Klass", start_line=1)
+        G.add_node(
+            "a.py:1",
+            kind="function",
+            file_path="a.py",
+            label="fn",
+            start_line=1,
+        )
+        G.add_node(
+            "b.py:1",
+            kind="class",
+            file_path="b.py",
+            label="Klass",
+            start_line=1,
+        )
 
         mock_store = MagicMock()
         mock_store.vector_search.return_value = [
@@ -1423,11 +1976,13 @@ class TestHybridSearchCacheNotStale:
 
             # First call — kind=function
             clear_search_cache()
-            r1 = hybrid_search("def", mock_store, G, top_k=10,
-                                kind="function", use_cache=True)
+            r1 = hybrid_search(
+                "def", mock_store, G, top_k=10, kind="function", use_cache=True
+            )
             # Second call — kind=class, must NOT get cached r1
-            r2 = hybrid_search("def", mock_store, G, top_k=10,
-                                kind="class", use_cache=True)
+            r2 = hybrid_search(
+                "def", mock_store, G, top_k=10, kind="class", use_cache=True
+            )
 
             ids1 = {n.node_id for n in r1.nodes if n.source == "seed"}
             ids2 = {n.node_id for n in r2.nodes if n.source == "seed"}

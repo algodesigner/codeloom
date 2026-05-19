@@ -21,6 +21,7 @@ pytest.importorskip("mcp", reason="mcp package not installed")
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_graph() -> nx.DiGraph:
     """Create a small test graph with realistic node attributes."""
     G = nx.DiGraph()
@@ -112,10 +113,12 @@ def mock_load_empty():
 # Tests: search tool
 # ---------------------------------------------------------------------------
 
+
 class TestSearchTool:
     def test_search_returns_results(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph, SearchResult
+
         mock_graph = SearchGraph(
             nodes=[
                 SearchResult(
@@ -132,7 +135,9 @@ class TestSearchTool:
             ],
             edges=[],
         )
-        with patch("codeloom.query.hybrid.hybrid_search", return_value=mock_graph):
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
             result = search("authentication")
 
         assert "auth.py:1" in result
@@ -140,6 +145,7 @@ class TestSearchTool:
     def test_search_no_results(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph
+
         empty = SearchGraph(nodes=[], edges=[])
         with patch("codeloom.query.hybrid.hybrid_search", return_value=empty):
             result = search("nonexistent_query_xyz")
@@ -149,8 +155,11 @@ class TestSearchTool:
     def test_search_fast_mode(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph
+
         empty = SearchGraph(nodes=[], edges=[])
-        with patch("codeloom.query.hybrid.hybrid_search", return_value=empty) as mock_hs:
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=empty
+        ) as mock_hs:
             search("test query", fast=True)
             mock_hs.assert_called_once()
             _, kwargs = mock_hs.call_args
@@ -159,8 +168,11 @@ class TestSearchTool:
     def test_search_custom_top_k(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph
+
         empty = SearchGraph(nodes=[], edges=[])
-        with patch("codeloom.query.hybrid.hybrid_search", return_value=empty) as mock_hs:
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=empty
+        ) as mock_hs:
             search("test", top_k=5)
             _, kwargs = mock_hs.call_args
             assert kwargs.get("top_k") == 5
@@ -168,6 +180,7 @@ class TestSearchTool:
     def test_search_result_without_end_line(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph, SearchResult
+
         mock_graph = SearchGraph(
             nodes=[
                 SearchResult(
@@ -183,7 +196,9 @@ class TestSearchTool:
             ],
             edges=[],
         )
-        with patch("codeloom.query.hybrid.hybrid_search", return_value=mock_graph):
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
             result = search("func")
 
         assert "test.py:10" in result
@@ -191,6 +206,7 @@ class TestSearchTool:
     def test_search_result_no_line_numbers(self, mock_load):
         from codeloom.mcp_server import search
         from codeloom.query.hybrid import SearchGraph, SearchResult
+
         mock_graph = SearchGraph(
             nodes=[
                 SearchResult(
@@ -206,7 +222,9 @@ class TestSearchTool:
             ],
             edges=[],
         )
-        with patch("codeloom.query.hybrid.hybrid_search", return_value=mock_graph):
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
             result = search("readme")
 
         assert "README.md:0" in result
@@ -215,6 +233,7 @@ class TestSearchTool:
 # ---------------------------------------------------------------------------
 # Tests: node tool
 # ---------------------------------------------------------------------------
+
 
 class TestNodeTool:
     def test_node_exact_match(self, mock_load):
@@ -278,11 +297,15 @@ class TestNodeTool:
 # Tests: stats tool
 # ---------------------------------------------------------------------------
 
+
 class TestStatsTool:
     def test_stats_basic(self, mock_load):
         from codeloom.mcp_server import stats
 
-        with patch("codeloom.core.analyze.analyze", return_value=SimpleNamespace(god_nodes=[])):
+        with patch(
+            "codeloom.core.analyze.analyze",
+            return_value=SimpleNamespace(god_nodes=[]),
+        ):
             result = stats()
         assert "3" in result  # 3 nodes
         assert "2" in result  # 2 edges
@@ -293,21 +316,30 @@ class TestStatsTool:
     def test_stats_shows_communities(self, mock_load):
         from codeloom.mcp_server import stats
 
-        with patch("codeloom.core.analyze.analyze", return_value=SimpleNamespace(god_nodes=[])):
+        with patch(
+            "codeloom.core.analyze.analyze",
+            return_value=SimpleNamespace(god_nodes=[]),
+        ):
             result = stats()
         assert "Communities" in result
 
     def test_stats_shows_density(self, mock_load):
         from codeloom.mcp_server import stats
 
-        with patch("codeloom.core.analyze.analyze", return_value=SimpleNamespace(god_nodes=[])):
+        with patch(
+            "codeloom.core.analyze.analyze",
+            return_value=SimpleNamespace(god_nodes=[]),
+        ):
             result = stats()
         assert "Density" in result
 
     def test_stats_empty_graph(self, mock_load_empty):
         from codeloom.mcp_server import stats
 
-        with patch("codeloom.core.analyze.analyze", return_value=SimpleNamespace(god_nodes=[])):
+        with patch(
+            "codeloom.core.analyze.analyze",
+            return_value=SimpleNamespace(god_nodes=[]),
+        ):
             result = stats()
         assert "Nodes" in result
         assert "0" in result
@@ -316,6 +348,7 @@ class TestStatsTool:
 # ---------------------------------------------------------------------------
 # Tests: communities tool
 # ---------------------------------------------------------------------------
+
 
 class TestCommunitiesTool:
     def test_communities_search(self, mock_load):
@@ -343,7 +376,10 @@ class TestCommunitiesTool:
         mock_row1 = {"id": 0, "level": 0, "summary": "Auth community"}
         mock_row2 = {"id": 1, "level": 0, "summary": "Server community"}
         mock_count = {"c": 2}
-        store.conn.execute.return_value.fetchall.return_value = [mock_row1, mock_row2]
+        store.conn.execute.return_value.fetchall.return_value = [
+            mock_row1,
+            mock_row2,
+        ]
         store.conn.execute.return_value.fetchone.return_value = mock_count
 
         result = communities()
@@ -376,6 +412,7 @@ class TestCommunitiesTool:
 # Tests: build tool
 # ---------------------------------------------------------------------------
 
+
 class TestBuildTool:
     def test_build_success(self, tmp_path):
         from codeloom.mcp_server import build
@@ -390,8 +427,12 @@ class TestBuildTool:
             graph=mock_graph,
             detected_files=["hello.py"],
         )
-        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result), \
-             patch("codeloom.mcp_server._reload"):
+        with (
+            patch(
+                "codeloom.core.pipeline.run_pipeline", return_value=mock_result
+            ),
+            patch("codeloom.mcp_server._reload"),
+        ):
             result = build(str(src))
 
         assert "Build Complete" in result
@@ -417,8 +458,12 @@ class TestBuildTool:
             graph=mock_graph,
             detected_files=["hello.py"],
         )
-        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result) as mock_pipe, \
-             patch("codeloom.mcp_server._reload"):
+        with (
+            patch(
+                "codeloom.core.pipeline.run_pipeline", return_value=mock_result
+            ) as mock_pipe,
+            patch("codeloom.mcp_server._reload"),
+        ):
             build(str(src), incremental=False)
             _, kwargs = mock_pipe.call_args
             assert kwargs.get("incremental") is False
@@ -427,6 +472,7 @@ class TestBuildTool:
 # ---------------------------------------------------------------------------
 # Tests: _load / _get_db_path helpers
 # ---------------------------------------------------------------------------
+
 
 class TestHelpers:
     def test_get_db_path_env_var(self, tmp_path):
@@ -447,8 +493,10 @@ class TestHelpers:
         # Create .codeloom/knowledge.db in tmp_path
         (tmp_path / ".codeloom").mkdir()
         (tmp_path / ".codeloom" / "knowledge.db").touch()
-        with patch("codeloom.mcp_server.Path.cwd", return_value=tmp_path), \
-             patch.dict("os.environ", {}, clear=True):
+        with (
+            patch("codeloom.mcp_server.Path.cwd", return_value=tmp_path),
+            patch.dict("os.environ", {}, clear=True),
+        ):
             result = mod._get_db_path()
             assert "knowledge.db" in result
         mod._db_path = None
@@ -459,7 +507,10 @@ class TestHelpers:
         mod._store = None
         mod._graph = None
         mod._db_path = None
-        with patch("codeloom.mcp_server._get_db_path", return_value="/fake/path/knowledge.db"):
+        with patch(
+            "codeloom.mcp_server._get_db_path",
+            return_value="/fake/path/knowledge.db",
+        ):
             with pytest.raises(FileNotFoundError, match="Run 'codeloom build"):
                 mod._load()
 
@@ -468,7 +519,10 @@ class TestHelpers:
 
         mod._store = "old"
         mod._graph = "old"
-        with patch("codeloom.mcp_server._load", return_value=("new_store", "new_graph")) as mock_l:
+        with patch(
+            "codeloom.mcp_server._load",
+            return_value=("new_store", "new_graph"),
+        ) as mock_l:
             mod._reload()
             assert mod._store is None or mock_l.called
 
@@ -483,8 +537,10 @@ class TestHelpers:
         # CWD has no DB
         cwd_no_db = tmp_path / "somewhere_else"
         cwd_no_db.mkdir()
-        with patch("codeloom.mcp_server.Path.cwd", return_value=cwd_no_db), \
-             patch.dict("os.environ", {}, clear=True):
+        with (
+            patch("codeloom.mcp_server.Path.cwd", return_value=cwd_no_db),
+            patch.dict("os.environ", {}, clear=True),
+        ):
             # Without source_dir, falls back to cwd default
             mod._db_path = None
             result = mod._get_db_path()
@@ -502,7 +558,10 @@ class TestHelpers:
         mod._store = None
         mod._graph = None
         mod._db_path = None
-        with patch("codeloom.mcp_server._get_db_path", return_value="/fake/path/knowledge.db"):
+        with patch(
+            "codeloom.mcp_server._get_db_path",
+            return_value="/fake/path/knowledge.db",
+        ):
             with pytest.raises(FileNotFoundError, match="CODELOOM_DB"):
                 mod._load()
 
@@ -523,9 +582,16 @@ class TestHelpers:
         mock_existing = MagicMock()
         mock_existing.load_graph.return_value = mock_graph
         mock_existing.close = MagicMock()
-        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result) as mock_pipe, \
-             patch("codeloom.mcp_server._reload"), \
-             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+        with (
+            patch(
+                "codeloom.core.pipeline.run_pipeline", return_value=mock_result
+            ) as mock_pipe,
+            patch("codeloom.mcp_server._reload"),
+            patch(
+                "codeloom.storage.store.KnowledgeStore",
+                return_value=mock_existing,
+            ),
+        ):
             result = mod.build(str(src))
             mock_pipe.assert_called_once()
             assert "Build Complete" in result
@@ -544,8 +610,13 @@ class TestHelpers:
         mock_existing = MagicMock()
         mock_existing.load_graph.return_value = mock_graph
         mock_existing.close = MagicMock()
-        with patch("codeloom.core.pipeline.run_pipeline") as mock_pipe, \
-             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+        with (
+            patch("codeloom.core.pipeline.run_pipeline") as mock_pipe,
+            patch(
+                "codeloom.storage.store.KnowledgeStore",
+                return_value=mock_existing,
+            ),
+        ):
             result = mod.build(str(src), incremental=False)
             mock_pipe.assert_not_called()
             assert "Database Already Exists" in result
@@ -569,9 +640,16 @@ class TestHelpers:
         mock_existing = MagicMock()
         mock_existing.load_graph.side_effect = Exception("corrupt database")
         mock_existing.close = MagicMock()
-        with patch("codeloom.core.pipeline.run_pipeline", return_value=mock_result) as mock_pipe, \
-             patch("codeloom.mcp_server._reload"), \
-             patch("codeloom.storage.store.KnowledgeStore", return_value=mock_existing):
+        with (
+            patch(
+                "codeloom.core.pipeline.run_pipeline", return_value=mock_result
+            ) as mock_pipe,
+            patch("codeloom.mcp_server._reload"),
+            patch(
+                "codeloom.storage.store.KnowledgeStore",
+                return_value=mock_existing,
+            ),
+        ):
             result = mod.build(str(src))
             mock_pipe.assert_called_once()
             assert "Build Complete" in result

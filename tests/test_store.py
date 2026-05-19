@@ -1,6 +1,5 @@
 """Tests for SQLite storage and FTS5 search."""
 
-
 import networkx as nx
 import numpy as np
 
@@ -9,24 +8,66 @@ from codeloom.storage.store import KnowledgeStore
 
 def _sample_graph():
     G = nx.DiGraph()
-    G.add_node("m::module::app", label="app", kind="module", file_path="app.py",
-               language="python", start_line=0, end_line=50,
-               docstring="Main application module", signature="",
-               source_snippet="import os\nclass App:", pagerank=0.5,
-               community_ids=[0])
-    G.add_node("m::class::App", label="App", kind="class", file_path="app.py",
-               language="python", start_line=2, end_line=40,
-               docstring="Application class", signature="class App",
-               source_snippet="class App:\n    def run(self):", pagerank=0.3,
-               community_ids=[0])
-    G.add_node("m::function::main", label="main", kind="function", file_path="app.py",
-               language="python", start_line=42, end_line=50,
-               docstring="Entry point", signature="def main()",
-               source_snippet="def main():\n    app = App()", pagerank=0.2,
-               community_ids=[1])
-    G.add_edge("m::module::app", "m::class::App", relation="defines", confidence="EXTRACTED")
-    G.add_edge("m::module::app", "m::function::main", relation="defines", confidence="EXTRACTED")
-    G.add_edge("m::function::main", "m::class::App", relation="calls", confidence="INFERRED")
+    G.add_node(
+        "m::module::app",
+        label="app",
+        kind="module",
+        file_path="app.py",
+        language="python",
+        start_line=0,
+        end_line=50,
+        docstring="Main application module",
+        signature="",
+        source_snippet="import os\nclass App:",
+        pagerank=0.5,
+        community_ids=[0],
+    )
+    G.add_node(
+        "m::class::App",
+        label="App",
+        kind="class",
+        file_path="app.py",
+        language="python",
+        start_line=2,
+        end_line=40,
+        docstring="Application class",
+        signature="class App",
+        source_snippet="class App:\n    def run(self):",
+        pagerank=0.3,
+        community_ids=[0],
+    )
+    G.add_node(
+        "m::function::main",
+        label="main",
+        kind="function",
+        file_path="app.py",
+        language="python",
+        start_line=42,
+        end_line=50,
+        docstring="Entry point",
+        signature="def main()",
+        source_snippet="def main():\n    app = App()",
+        pagerank=0.2,
+        community_ids=[1],
+    )
+    G.add_edge(
+        "m::module::app",
+        "m::class::App",
+        relation="defines",
+        confidence="EXTRACTED",
+    )
+    G.add_edge(
+        "m::module::app",
+        "m::function::main",
+        relation="defines",
+        confidence="EXTRACTED",
+    )
+    G.add_edge(
+        "m::function::main",
+        "m::class::App",
+        relation="calls",
+        confidence="INFERRED",
+    )
     return G
 
 

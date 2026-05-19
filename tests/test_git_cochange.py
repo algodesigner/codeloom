@@ -34,17 +34,22 @@ def _make_commits(
     """Create test commits from file groups."""
     commits = []
     for i, files in enumerate(file_groups):
-        commits.append(CommitInfo(
-            hash=f"abc{i:04d}",
-            timestamp=base_time + i * interval,
-            message=f"commit {i}: update {', '.join(files)}",
-            files=list(files),
-        ))
+        commits.append(
+            CommitInfo(
+                hash=f"abc{i:04d}",
+                timestamp=base_time + i * interval,
+                message=f"commit {i}: update {', '.join(files)}",
+                files=list(files),
+            )
+        )
     return commits
 
 
-def _make_graph_with_modules(*rel_paths: str, source_dir: Path = REPO_DIR) -> nx.DiGraph:
-    """Create a graph with module nodes using absolute paths (matching real extraction).
+def _make_graph_with_modules(
+    *rel_paths: str,
+    source_dir: Path = REPO_DIR,
+) -> nx.DiGraph:
+    """Create a graph with module nodes using absolute paths.
 
     The file_path attribute uses absolute paths, matching how ts_extract works.
     node IDはfile:0形式（moduleノード）。
@@ -54,13 +59,20 @@ def _make_graph_with_modules(*rel_paths: str, source_dir: Path = REPO_DIR) -> nx
         abs_path = str(source_dir / rp)
         stem = Path(rp).stem
         node_id = f"{abs_path}:0"
-        G.add_node(node_id, label=stem, kind="module", file_path=abs_path, language="python")
+        G.add_node(
+            node_id,
+            label=stem,
+            kind="module",
+            file_path=abs_path,
+            language="python",
+        )
     return G
 
 
 # ---------------------------------------------------------------------------
 # _file_to_module_id
 # ---------------------------------------------------------------------------
+
 
 class TestFileToModuleId:
     def test_simple_python_file(self):
@@ -80,6 +92,7 @@ class TestFileToModuleId:
 # _build_file_to_node_index
 # ---------------------------------------------------------------------------
 
+
 class TestBuildFileToNodeIndex:
     def test_indexes_module_nodes(self):
         G = _make_graph_with_modules("a.py", "b.py")
@@ -90,15 +103,20 @@ class TestBuildFileToNodeIndex:
 
     def test_indexes_document_nodes(self):
         G = nx.DiGraph()
-        G.add_node("README.md:0", label="README",
-                    kind="document", file_path="/repo/README.md")
+        G.add_node(
+            "README.md:0",
+            label="README",
+            kind="document",
+            file_path="/repo/README.md",
+        )
         index = _build_file_to_node_index(G)
         assert "/repo/README.md" in index
 
     def test_skips_non_root_nodes(self):
         G = nx.DiGraph()
-        G.add_node("a.py:5", label="foo",
-                    kind="function", file_path="/repo/a.py")
+        G.add_node(
+            "a.py:5", label="foo", kind="function", file_path="/repo/a.py"
+        )
         index = _build_file_to_node_index(G)
         assert len(index) == 0
 
@@ -106,6 +124,7 @@ class TestBuildFileToNodeIndex:
 # ---------------------------------------------------------------------------
 # _parse_log_output
 # ---------------------------------------------------------------------------
+
 
 class TestParseLogOutput:
     def test_basic_parse(self):
@@ -188,6 +207,7 @@ M\tother.py
 # _resolve_renames
 # ---------------------------------------------------------------------------
 
+
 class TestResolveRenames:
     def test_simple_rename(self):
         commits = [CommitInfo("a", 0, "msg", ["old.py", "other.py"])]
@@ -214,13 +234,21 @@ class TestResolveRenames:
 # compute_cochange_pairs
 # ---------------------------------------------------------------------------
 
+
 class TestComputeCochangePairs:
     def test_basic_cochange(self):
         commits = _make_commits(
-            ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "c.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "c.py"],
         )
         edges = compute_cochange_pairs(
-            commits, REPO_DIR, min_support=3, min_confidence=0.0, decay_half_life_days=365,
+            commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+            decay_half_life_days=365,
         )
         assert len(edges) >= 1
         ab_edge = [e for e in edges if "a" in e.source and "b" in e.target]
@@ -229,14 +257,23 @@ class TestComputeCochangePairs:
 
     def test_below_min_support_filtered(self):
         commits = _make_commits(["a.py", "b.py"], ["a.py", "b.py"])
-        edges = compute_cochange_pairs(commits, REPO_DIR, min_support=3, min_confidence=0.0)
+        edges = compute_cochange_pairs(
+            commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+        )
         assert len(edges) == 0
 
     def test_fanout_cap(self):
         many_files = [f"file_{i}.py" for i in range(50)]
         commits = _make_commits(many_files, many_files, many_files)
         edges = compute_cochange_pairs(
-            commits, REPO_DIR, max_files_per_commit=30, min_support=1, min_confidence=0.0,
+            commits,
+            REPO_DIR,
+            max_files_per_commit=30,
+            min_support=1,
+            min_confidence=0.0,
         )
         assert len(edges) == 0
 
@@ -247,10 +284,17 @@ class TestComputeCochangePairs:
 
     def test_strength_normalization(self):
         commits = _make_commits(
-            ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "c.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "c.py"],
         )
         edges = compute_cochange_pairs(
-            commits, REPO_DIR, min_support=3, min_confidence=0.0, decay_half_life_days=365,
+            commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+            decay_half_life_days=365,
         )
         ab_edge = [e for e in edges if "a" in e.source and "b" in e.target][0]
         expected = 3 / math.sqrt(4 * 3)
@@ -258,16 +302,26 @@ class TestComputeCochangePairs:
 
     def test_time_decay_weighting(self):
         recent_commits = _make_commits(
-            ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"],
-            base_time=999_000, interval=500,
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            base_time=999_000,
+            interval=500,
         )
         old_commits = _make_commits(
-            ["c.py", "d.py"], ["c.py", "d.py"], ["c.py", "d.py"],
-            base_time=100, interval=1,
+            ["c.py", "d.py"],
+            ["c.py", "d.py"],
+            ["c.py", "d.py"],
+            base_time=100,
+            interval=1,
         )
         all_commits = recent_commits + old_commits
         edges = compute_cochange_pairs(
-            all_commits, REPO_DIR, min_support=3, min_confidence=0.0, decay_half_life_days=1,
+            all_commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+            decay_half_life_days=1,
         )
         ab_edge = [e for e in edges if "a" in e.source and "b" in e.target]
         cd_edge = [e for e in edges if "c" in e.source and "d" in e.target]
@@ -277,15 +331,27 @@ class TestComputeCochangePairs:
     def test_confidence_levels(self):
         commits_high = _make_commits(*([["a.py", "b.py"]] * 6))
         edges = compute_cochange_pairs(
-            commits_high, REPO_DIR, min_support=3, min_confidence=0.0, decay_half_life_days=365,
+            commits_high,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+            decay_half_life_days=365,
         )
         assert len(edges) == 1
         assert edges[0].confidence == "EXTRACTED"
 
     def test_commit_messages_captured(self):
-        commits = _make_commits(["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"])
+        commits = _make_commits(
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+        )
         edges = compute_cochange_pairs(
-            commits, REPO_DIR, min_support=3, min_confidence=0.0, max_sample_messages=2,
+            commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+            max_sample_messages=2,
         )
         assert len(edges) == 1
         assert len(edges[0].sample_messages) <= 2
@@ -297,7 +363,12 @@ class TestComputeCochangePairs:
             ["src/auth.py", "src/session.py"],
             ["src/auth.py", "src/session.py"],
         )
-        edges = compute_cochange_pairs(commits, REPO_DIR, min_support=3, min_confidence=0.0)
+        edges = compute_cochange_pairs(
+            commits,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+        )
         assert len(edges) == 1
         assert edges[0].source == "src/auth.py:0"
         assert edges[0].target == "src/session.py:0"
@@ -306,6 +377,7 @@ class TestComputeCochangePairs:
 # ---------------------------------------------------------------------------
 # enrich_graph_with_cochange
 # ---------------------------------------------------------------------------
+
 
 class TestEnrichGraph:
     @patch("codeloom.core.git_cochange._is_git_repo", return_value=False)
@@ -320,13 +392,18 @@ class TestEnrichGraph:
     def test_edges_added_to_graph(self, mock_log, mock_git_root, mock_is_git):
         """Co-change edges should be added bidirectionally to the graph."""
         mock_log.return_value = _make_commits(
-            ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
         )
         G = _make_graph_with_modules("a.py", "b.py")
         initial_edges = G.number_of_edges()
 
         count = enrich_graph_with_cochange(
-            G, REPO_DIR, min_support=3, min_confidence=0.0,
+            G,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
         )
 
         assert count > 0
@@ -344,10 +421,17 @@ class TestEnrichGraph:
     @patch("codeloom.core.git_cochange.parse_git_log")
     def test_missing_nodes_skipped(self, mock_log, mock_git_root, mock_is_git):
         mock_log.return_value = _make_commits(
-            ["a.py", "missing.py"], ["a.py", "missing.py"], ["a.py", "missing.py"],
+            ["a.py", "missing.py"],
+            ["a.py", "missing.py"],
+            ["a.py", "missing.py"],
         )
         G = _make_graph_with_modules("a.py")
-        count = enrich_graph_with_cochange(G, REPO_DIR, min_support=3, min_confidence=0.0)
+        count = enrich_graph_with_cochange(
+            G,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+        )
         assert count == 0
 
     @patch("codeloom.core.git_cochange._is_git_repo", return_value=True)
@@ -355,10 +439,17 @@ class TestEnrichGraph:
     @patch("codeloom.core.git_cochange.parse_git_log")
     def test_edge_attributes(self, mock_log, mock_git_root, mock_is_git):
         mock_log.return_value = _make_commits(
-            ["a.py", "b.py"], ["a.py", "b.py"], ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
+            ["a.py", "b.py"],
         )
         G = _make_graph_with_modules("a.py", "b.py")
-        enrich_graph_with_cochange(G, REPO_DIR, min_support=3, min_confidence=0.0)
+        enrich_graph_with_cochange(
+            G,
+            REPO_DIR,
+            min_support=3,
+            min_confidence=0.0,
+        )
 
         a_id = f"{REPO_DIR}/a.py:0"
         b_id = f"{REPO_DIR}/b.py:0"
@@ -382,10 +473,14 @@ class TestEnrichGraph:
 # parse_git_log (integration with subprocess mock)
 # ---------------------------------------------------------------------------
 
+
 class TestParseGitLog:
     @patch("subprocess.run")
     def test_subprocess_failure_returns_empty(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stderr="fatal: not a git repo")
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stderr="fatal: not a git repo",
+        )
         commits = parse_git_log(Path("/tmp"))
         assert commits == []
 

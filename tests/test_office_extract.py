@@ -17,7 +17,10 @@ def _make_docx(path: Path, paragraphs: list[str]) -> Path:
         t = ET.SubElement(r, f"{{{ns}}}t")
         t.text = text
     doc_xml = ET.tostring(body, encoding="unicode", xml_declaration=False)
-    full_doc = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{ns}">{doc_xml}</w:document>'
+    full_doc = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{ns}">{doc_xml}</w:document>'
+    )
 
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("word/document.xml", full_doc)
@@ -49,7 +52,10 @@ def _make_xlsx(path: Path, sheets: list[tuple[str, list[list[str]]]]) -> Path:
     for si in sst_items:
         sst.append(si)
     sst_xml = ET.tostring(sst, encoding="unicode", xml_declaration=False)
-    full_sst = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="{ns}">{sst_xml}</sst>'
+    full_sst = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<sst xmlns="{ns}">{sst_xml}</sst>'
+    )
 
     with zipfile.ZipFile(path, "w") as z:
         # Write workbook
@@ -62,7 +68,11 @@ def _make_xlsx(path: Path, sheets: list[tuple[str, list[list[str]]]]) -> Path:
             ws.set("sheetId", str(i + 1))
             ws.set(f"{{{r_ns}}}id", f"rId{i + 1}")
         wb_xml = ET.tostring(wb, encoding="unicode", xml_declaration=False)
-        full_wb = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="{wb_ns}" xmlns:r="{r_ns}">{wb_xml}</workbook>'
+        full_wb = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<workbook xmlns="{wb_ns}" xmlns:r="{r_ns}">'
+            f"{wb_xml}</workbook>"
+        )
         z.writestr("xl/workbook.xml", full_wb)
 
         # Write shared strings
@@ -86,8 +96,16 @@ def _make_xlsx(path: Path, sheets: list[tuple[str, list[list[str]]]]) -> Path:
                     else:
                         v = ET.SubElement(cell_elem, f"{{{ns}}}v")
                         v.text = cell_val
-            sheet_xml_body = ET.tostring(sheet_data, encoding="unicode", xml_declaration=False)
-            full_sheet = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="{ns}">{sheet_xml_body}</worksheet>'
+            sheet_xml_body = ET.tostring(
+                sheet_data,
+                encoding="unicode",
+                xml_declaration=False,
+            )
+            full_sheet = (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<worksheet xmlns="{ns}">'
+                f"{sheet_xml_body}</worksheet>"
+            )
             z.writestr(f"xl/worksheets/sheet{i + 1}.xml", full_sheet)
 
     return path
@@ -98,12 +116,13 @@ def _make_odt(path: Path, paragraphs: list[str]) -> Path:
     ns_text = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
     ns_office = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
 
-    paras = "\n".join(f'<text:p>{p}</text:p>' for p in paragraphs)
+    paras = "\n".join(f"<text:p>{p}</text:p>" for p in paragraphs)
     content_xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<office:document-content xmlns:office="{ns_office}" xmlns:text="{ns_text}">'
-        f'<office:body><office:text>{paras}</office:text></office:body>'
-        f'</office:document-content>'
+        f"<office:document-content "
+        f'xmlns:office="{ns_office}" xmlns:text="{ns_text}">'
+        f"<office:body><office:text>{paras}</office:text></office:body>"
+        f"</office:document-content>"
     )
 
     with zipfile.ZipFile(path, "w") as z:
@@ -123,15 +142,25 @@ def _make_ods(path: Path, sheets: list[tuple[str, list[list[str]]]]) -> Path:
         for row_cells in rows:
             cells_xml = ""
             for cell_val in row_cells:
-                cells_xml += f'<table:table-cell office:value-type="string"><text:p>{cell_val}</text:p></table:table-cell>'
+                cells_xml += (
+                    f"<table:table-cell "
+                    f'office:value-type="string">'
+                    f"<text:p>{cell_val}</text:p>"
+                    f"</table:table-cell>"
+                )
             rows_xml += f"<table:table-row>{cells_xml}</table:table-row>"
-        tables_xml += f'<table:table table:name="{sheet_name}">{rows_xml}</table:table>'
+        tables_xml += (
+            f'<table:table table:name="{sheet_name}">{rows_xml}</table:table>'
+        )
 
     content_xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<office:document-content xmlns:office="{ns_office}" xmlns:text="{ns_text}" xmlns:table="{ns_table}">'
-        f'<office:body><office:spreadsheet>{tables_xml}</office:spreadsheet></office:body>'
-        f'</office:document-content>'
+        f"<office:document-content "
+        f'xmlns:office="{ns_office}" '
+        f'xmlns:text="{ns_text}" '
+        f'xmlns:table="{ns_table}">'
+        f"<office:body><office:spreadsheet>{tables_xml}</office:spreadsheet></office:body>"
+        f"</office:document-content>"
     )
 
     with zipfile.ZipFile(path, "w") as z:
@@ -151,15 +180,20 @@ def _make_odp(path: Path, slides: list[tuple[str, list[str]]]) -> Path:
         paras_xml = "".join(f"<text:p>{p}</text:p>" for p in paragraphs)
         pages_xml += (
             f'<draw:page draw:name="{slide_name}">'
-            f'<draw:page-thumbnail/><office:presentation>{paras_xml}</office:presentation>'
-            f'</draw:page>'
+            f"<draw:page-thumbnail/><office:presentation>{paras_xml}</office:presentation>"
+            f"</draw:page>"
         )
 
     content_xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<office:presentation xmlns:office="{ns_office}" xmlns:draw="{ns_draw}" xmlns:text="{ns_text}" xmlns:presentation="{ns_pres}">'
-        f'<office:body><office:presentation>{pages_xml}</office:presentation></office:body>'
-        f'</office:presentation>'
+        f"<office:presentation "
+        f'xmlns:office="{ns_office}" '
+        f'xmlns:draw="{ns_draw}" '
+        f'xmlns:text="{ns_text}" '
+        f"xmlns:presentation="
+        f'"{ns_pres}">'
+        f"<office:body><office:presentation>{pages_xml}</office:presentation></office:body>"
+        f"</office:presentation>"
     )
 
     with zipfile.ZipFile(path, "w") as z:
@@ -197,14 +231,20 @@ class TestDocxExtraction:
 
 class TestXlsxExtraction:
     def test_extracts_document_node(self, tmp_path):
-        p = _make_xlsx(tmp_path / "test.xlsx", [("Sheet1", [["a", "b"], ["1", "2"]])])
+        p = _make_xlsx(
+            tmp_path / "test.xlsx",
+            [("Sheet1", [["a", "b"], ["1", "2"]])],
+        )
         result = extract_file(str(p), "xlsx", "")
         docs = [n for n in result.nodes if n.kind == "document"]
         assert len(docs) == 1
         assert docs[0].name == "test"
 
     def test_extracts_rows(self, tmp_path):
-        p = _make_xlsx(tmp_path / "test.xlsx", [("Sheet1", [["h1", "h2"], ["v1", "v2"]])])
+        p = _make_xlsx(
+            tmp_path / "test.xlsx",
+            [("Sheet1", [["h1", "h2"], ["v1", "v2"]])],
+        )
         result = extract_file(str(p), "xlsx", "")
         sections = [n for n in result.nodes if n.kind == "section"]
         assert len(sections) >= 2
@@ -251,7 +291,10 @@ class TestOdtExtraction:
 
 class TestOdsExtraction:
     def test_extracts_document_node(self, tmp_path):
-        p = _make_ods(tmp_path / "test.ods", [("Sheet1", [["a", "1"], ["b", "2"]])])
+        p = _make_ods(
+            tmp_path / "test.ods",
+            [("Sheet1", [["a", "1"], ["b", "2"]])],
+        )
         result = extract_file(str(p), "ods", "")
         docs = [n for n in result.nodes if n.kind == "document"]
         assert len(docs) == 1
@@ -279,7 +322,10 @@ class TestOdpExtraction:
         assert docs[0].name == "test"
 
     def test_extracts_slides(self, tmp_path):
-        p = _make_odp(tmp_path / "test.odp", [("Slide1", ["Title"]), ("Slide2", ["Content"])])
+        p = _make_odp(
+            tmp_path / "test.odp",
+            [("Slide1", ["Title"]), ("Slide2", ["Content"])],
+        )
         result = extract_file(str(p), "odp", "")
         sections = [n for n in result.nodes if n.kind == "section"]
         assert len(sections) == 2

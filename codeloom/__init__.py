@@ -1,4 +1,6 @@
-"""codeloom: Local-first code graph builder with 5-signal hybrid search for AI coding agents."""
+"""codeloom: Local-first code graph builder with 5-signal hybrid search
+for AI coding agents.
+"""
 
 __version__ = "0.1.1"
 

@@ -62,10 +62,7 @@ def _detect_hub_nodes(
     in_degrees = [G.in_degree(n) for n in G.nodes()]
     threshold = max(np.percentile(in_degrees, percentile), min_threshold)
 
-    return {
-        n for n in G.nodes()
-        if G.in_degree(n) > threshold
-    }
+    return {n for n in G.nodes() if G.in_degree(n) > threshold}
 
 
 def hierarchical_cluster(
@@ -154,10 +151,16 @@ def hierarchical_cluster(
                     for node_id in members:
                         if node_id in prev_level_map:
                             pid = prev_level_map[node_id]
-                            parent_candidates[pid] = parent_candidates.get(pid, 0) + 1
+                            parent_candidates[pid] = (
+                                parent_candidates.get(pid, 0) + 1
+                            )
                     if parent_candidates:
-                        comm.parent_id = max(parent_candidates, key=parent_candidates.get)
-                        result.communities[comm.parent_id].children_ids.append(community_counter)
+                        comm.parent_id = max(
+                            parent_candidates, key=parent_candidates.get
+                        )
+                        result.communities[comm.parent_id].children_ids.append(
+                            community_counter
+                        )
 
                 result.communities[community_counter] = comm
 
@@ -207,12 +210,16 @@ def get_community_nodes(G: nx.DiGraph, community: Community) -> nx.DiGraph:
     return G.subgraph(community.node_ids).copy()
 
 
-def community_label(G: nx.DiGraph, community: Community, max_labels: int = 5) -> str:
+def community_label(
+    G: nx.DiGraph, community: Community, max_labels: int = 5
+) -> str:
     """Generate a descriptive label for a community based on its top nodes."""
     subgraph = G.subgraph(community.node_ids)
     # Sort by degree centrality
     centrality = nx.degree_centrality(subgraph)
-    top_nodes = sorted(centrality, key=centrality.get, reverse=True)[:max_labels]
+    top_nodes = sorted(centrality, key=centrality.get, reverse=True)[
+        :max_labels
+    ]
     labels = [G.nodes[n].get("label", n) for n in top_nodes]
     return ", ".join(labels)
 
@@ -260,6 +267,7 @@ def summarize_communities(
             fp = data.get("file_path", "")
             if fp:
                 from pathlib import Path
+
                 files.add(Path(fp).name)
             doc = data.get("docstring", "")
             if doc:

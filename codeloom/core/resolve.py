@@ -20,21 +20,41 @@ import networkx as nx
 logger = logging.getLogger(__name__)
 
 # Kinds that form "definitions" — things that can be referenced
-DEFINITION_KINDS = frozenset({
-    "function", "class", "method", "interface", "enum", "struct",
-    "trait", "constructor", "property", "type_alias", "variable",
-    "module", "section",
-})
+DEFINITION_KINDS = frozenset(
+    {
+        "function",
+        "class",
+        "method",
+        "interface",
+        "enum",
+        "struct",
+        "trait",
+        "constructor",
+        "property",
+        "type_alias",
+        "variable",
+        "module",
+        "section",
+    }
+)
 
 # Edge relations that can be resolved
-RESOLVABLE_RELATIONS = frozenset({
-    "calls", "imports", "inherits", "references", "defines", "contains",
-})
+RESOLVABLE_RELATIONS = frozenset(
+    {
+        "calls",
+        "imports",
+        "inherits",
+        "references",
+        "defines",
+        "contains",
+    }
+)
 
 
 @dataclass
 class Span:
     """A definition span within a file."""
+
     node_id: str
     start_line: int
     end_line: int
@@ -45,6 +65,7 @@ class Span:
 @dataclass
 class ResolutionResult:
     """Result of running reference resolution."""
+
     resolved: int = 0
     already_resolved: int = 0
     unresolved: int = 0
@@ -69,8 +90,9 @@ def _extract_file_path(node_id: str) -> str:
     idx = node_id.rfind(":")
     if idx == -1:
         return node_id
-    # Check if the part after : is a number (line) or part of the path (Windows C:)
-    line_part = node_id[idx + 1:]
+    # Check if the part after : is a number (line) or part of the
+    # path (e.g. Windows C:)
+    line_part = node_id[idx + 1 :]
     if line_part.isdigit():
         return node_id[:idx]
     return node_id
@@ -80,7 +102,7 @@ def build_spatial_index(
     G: nx.DiGraph,
     definition_kinds: frozenset[str] = DEFINITION_KINDS,
 ) -> dict[str, list[Span]]:
-    """Build a spatial index mapping file_path -> sorted list of definition spans.
+    """Build a spatial index: file_path -> sorted list of definition spans.
 
     Each file's spans are sorted by start_line for binary search lookup.
 
@@ -163,22 +185,24 @@ def resolve_graph(
     definition_kinds: frozenset[str] = DEFINITION_KINDS,
     resolvable_relations: frozenset[str] = RESOLVABLE_RELATIONS,
 ) -> ResolutionResult:
-    """Resolve all resolvable edges in the graph to their containing definitions.
+    """Resolve all resolvable edges in the graph to their containing
+    definitions.
 
-    For each edge whose target refers to a file:line position, looks up
-    which definition contains that line and updates the edge target to
-    point to the actual definition node.
+    For each edge whose target refers to a file:line position, looks
+    up which definition contains that line and updates the edge target
+    to point to the actual definition node.
 
-    The graph is modified in place. Edges already pointing to definition
-    nodes are left unchanged (counted as already_resolved).
+    The graph is modified in place. Edges already pointing to
+    definition nodes are left unchanged (counted as already_resolved).
 
     Args:
         G: The code graph (modified in place).
         definition_kinds: Node kinds considered definitions.
-        resolvable_relations: Edge relations to attempt resolution for.
+        resolvable_relations: Edge relations to attempt resolution.
 
     Returns:
-        ResolutionResult with counts of resolved/unresolved/error edges.
+        ResolutionResult with counts of resolved/unresolved/error
+        edges.
     """
     result = ResolutionResult()
 
@@ -194,7 +218,8 @@ def resolve_graph(
             existing_definitions[node_id] = data["file_path"]
             file_path = data["file_path"]
             start_line = data.get("start_line", 0)
-            definitions_by_file.setdefault(file_path, []).append((start_line, node_id))
+            defs = definitions_by_file.setdefault(file_path, [])
+            defs.append((start_line, node_id))
 
     # Sort definitions within each file by start_line
     for file_path in definitions_by_file:
@@ -256,8 +281,10 @@ def resolve_graph(
         logger.info(
             "Resolved %d edges to definition targets "
             "(%d already resolved, %d still unresolved, %d skipped relation)",
-            result.resolved, result.already_resolved,
-            result.unresolved, result.skipped_relation,
+            result.resolved,
+            result.already_resolved,
+            result.unresolved,
+            result.skipped_relation,
         )
 
     return result

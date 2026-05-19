@@ -2,7 +2,7 @@
 
 Dual-model architecture:
 - Code nodes (function, class, method, module) → BAAI/bge-small-en-v1.5
-- Text nodes (heading, section, docstring, etc.) → intfloat/multilingual-e5-small
+- Text (heading, section, docstring, etc.) → intfloat/multilingual-e5-small
 
 Both models output 384-dim vectors, enabling a single FAISS index.
 Memory-bounded: yields batches to avoid loading all vectors into RAM at once.
@@ -32,25 +32,47 @@ TEXT_MODEL = "intfloat/multilingual-e5-small"
 MULTILINGUAL_TEXT_MODEL = TEXT_MODEL
 
 # Models that require instruction prefixes (E5 family)
+_PREFIX_TRIPLE = {"query": "query: ", "passage": "passage: "}
+
 _PREFIX_MODELS: dict[str, dict[str, str]] = {
-    "intfloat/multilingual-e5-small": {"query": "query: ", "passage": "passage: "},
-    "intfloat/multilingual-e5-base": {"query": "query: ", "passage": "passage: "},
-    "intfloat/multilingual-e5-large": {"query": "query: ", "passage": "passage: "},
+    "intfloat/multilingual-e5-small": _PREFIX_TRIPLE,
+    "intfloat/multilingual-e5-base": _PREFIX_TRIPLE,
+    "intfloat/multilingual-e5-large": _PREFIX_TRIPLE,
 }
 
 # Node kinds routed to the code model
-CODE_KINDS = frozenset({
-    "function", "class", "method", "module", "variable",
-    "interface", "enum", "struct", "trait", "import",
-    "constructor", "property", "decorator", "type_alias",
-})
+CODE_KINDS = frozenset(
+    {
+        "function",
+        "class",
+        "method",
+        "module",
+        "variable",
+        "interface",
+        "enum",
+        "struct",
+        "trait",
+        "import",
+        "constructor",
+        "property",
+        "decorator",
+        "type_alias",
+    }
+)
 
 # Tier 1: エンベディング対象ノード（ベクターサーチ対象）
-EMBED_KINDS = frozenset({
-    "function", "class", "method",        # コードの主要単位
-    "section",                             # ドキュメントの意味単位
-    "interface", "enum", "struct", "trait", # 型定義
-})
+EMBED_KINDS = frozenset(
+    {
+        "function",
+        "class",
+        "method",  # コードの主要単位
+        "section",  # ドキュメントの意味単位
+        "interface",
+        "enum",
+        "struct",
+        "trait",  # 型定義
+    }
+)
 
 # Node kinds excluded from embedding (these are references to external
 # libraries/symbols that lack source code, docstrings, and file paths,
@@ -81,15 +103,22 @@ def _get_model(model_name: str):
         is_cached = local_path.exists() and any(local_path.iterdir())
 
         if is_cached:
-            logger.debug("Loading cached model '%s' from %s", model_name, local_path)
+            logger.debug(
+                "Loading cached model '%s' from %s", model_name, local_path
+            )
             _models[model_name] = SentenceTransformer(str(local_path))
         else:
-            logger.info("Downloading embedding model '%s' (first time only)...", model_name)
+            logger.info(
+                "Downloading embedding model '%s' (first time only)...",
+                model_name,
+            )
             try:
                 from rich.console import Console
+
                 Console(stderr=True).print(
-                    f"[yellow]⬇ Downloading embedding model '{model_name}' "
-                    f"(first time only, saved to ~/.codeloom/models/)...[/yellow]"
+                    f"[yellow]⬇ Downloading embedding model "
+                    f"'{model_name}' (first time only, "
+                    f"saved to ~/.codeloom/models/)...[/yellow]"
                 )
             except ImportError:
                 pass
@@ -108,6 +137,7 @@ def _get_process_rss() -> int:
     try:
         import platform
         import resource
+
         rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         if platform.system() == "Darwin":
             return rss  # already bytes on macOS
@@ -138,14 +168,17 @@ def _node_text(data: dict) -> str:
     if data.get("docstring"):
         parts.append(data["docstring"])
     elif data.get("source_snippet"):
-        # docstringがない場合のみsnippetをフォールバックとして使用（300文字制限）
+        # docstringがない場合のみsnippetをフォールバックとして使用
+        # （300文字制限）
         parts.append(data["source_snippet"][:300])
     text = " ".join(parts)
     return text[:_MAX_EMBED_TEXT_CHARS]
 
 
 def _collect_commit_context(
-    G: "nx.DiGraph", node_id: str, max_messages: int = 10,
+    G: "nx.DiGraph",
+    node_id: str,
+    max_messages: int = 10,
 ) -> str:
     """Collect unique commit messages from co_change edges for a node.
 
@@ -183,7 +216,9 @@ def is_code_node(kind: str) -> bool:
     return kind.lower() in CODE_KINDS
 
 
-def _add_prefix(model_name: str, texts: list[str], mode: str = "passage") -> list[str]:
+def _add_prefix(
+    model_name: str, texts: list[str], mode: str = "passage"
+) -> list[str]:
     """Add instruction prefix if required by the model (e.g. E5 family)."""
     prefixes = _PREFIX_MODELS.get(model_name)
     if not prefixes:
@@ -223,7 +258,8 @@ def embed_nodes_streaming(
 
     Args:
         text_model: Override text model (e.g. multilingual-e5-small).
-        skip_ids: Node IDs to skip (already embedded). Used for incremental builds.
+        skip_ids: Node IDs to skip (already embedded).
+            Used for incremental builds.
 
     Yields:
         (node_ids_batch, vectors_batch, model_type) tuples.
@@ -237,7 +273,8 @@ def embed_nodes_streaming(
     skipped_incremental = 0
     for node_id, data in G.nodes(data=True):
         kind = data.get("kind", "")
-        # EMBED_KINDSに含まれないノードはスキップ（低情報ノードのベクター汚染防止）
+        # EMBED_KINDSに含まれないノードはスキップ
+        # （低情報ノードのベクター汚染防止）
         if kind.lower() not in EMBED_KINDS:
             skipped += 1
             continue
@@ -262,21 +299,27 @@ def embed_nodes_streaming(
         )
 
     logger.debug(
-        "Dual-model split: %d code nodes, %d text nodes, %d skipped, %d incremental-skip",
-        len(code_ids), len(text_ids), skipped, skipped_incremental,
+        "Dual-model split: %d code nodes, %d text nodes, "
+        "%d skipped, %d incremental-skip",
+        len(code_ids),
+        len(text_ids),
+        skipped,
+        skipped_incremental,
     )
 
     # Embed code nodes
     for i in range(0, len(code_texts), batch_size):
         batch_ids = code_ids[i : i + batch_size]
-        vectors = _encode_batch(code_model, code_texts[i : i + batch_size], batch_size)
+        batch_texts = code_texts[i : i + batch_size]
+        vectors = _encode_batch(code_model, batch_texts, batch_size)
         yield batch_ids, vectors, "code"
         _memory_guard()
 
     # Embed text nodes
     for i in range(0, len(text_texts), batch_size):
         batch_ids = text_ids[i : i + batch_size]
-        vectors = _encode_batch(effective_text, text_texts[i : i + batch_size], batch_size)
+        batch_texts = text_texts[i : i + batch_size]
+        vectors = _encode_batch(effective_text, batch_texts, batch_size)
         yield batch_ids, vectors, "text"
         _memory_guard()
 
@@ -304,14 +347,18 @@ def embed_nodes(
             return result
         model = _get_model(model_name)
         vectors = model.encode(
-            texts, batch_size=batch_size, show_progress_bar=False,
+            texts,
+            batch_size=batch_size,
+            show_progress_bar=False,
             normalize_embeddings=True,
         )
         return dict(zip(node_ids, vectors))
 
     # Dual-model path
     result = {}
-    for batch_ids, batch_vecs, _ in embed_nodes_streaming(G, batch_size=batch_size):
+    for batch_ids, batch_vecs, _ in embed_nodes_streaming(
+        G, batch_size=batch_size
+    ):
         for nid, vec in zip(batch_ids, batch_vecs):
             result[nid] = vec
     return result
@@ -365,9 +412,11 @@ def embed_query_dual(
     code_query = _add_prefix(CODE_MODEL, [query], "query")[0]
     text_query = _add_prefix(effective_text, [query], "query")[0]
 
+    code_model_obj = _get_model(CODE_MODEL)
+    text_model_obj = _get_model(effective_text)
     result = {
-        "code": _get_model(CODE_MODEL).encode(code_query, normalize_embeddings=True),
-        "text": _get_model(effective_text).encode(text_query, normalize_embeddings=True),
+        "code": code_model_obj.encode(code_query, normalize_embeddings=True),
+        "text": text_model_obj.encode(text_query, normalize_embeddings=True),
     }
 
     _query_cache[cache_key] = result
