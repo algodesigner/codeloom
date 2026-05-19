@@ -111,6 +111,7 @@ def search(
     fast: bool = False,
     kind: str | None = None,
     file_pattern: str | None = None,
+    include_tests: bool = False,
 ) -> str:
     """Search the code graph. This is the PRIMARY tool — use it first.
 
@@ -125,6 +126,8 @@ def search(
         kind: Filter by symbol kind. Valid: function, class, method,
               interface, enum, struct, trait, section.
         file_pattern: Filter by file path glob (e.g. "src/auth/*")
+        include_tests: Give test files equal ranking weight (default False,
+              test files are demoted 0.3x).
     """
     store, G = _load()
     from codeloom.query.hybrid import hybrid_search
@@ -132,6 +135,7 @@ def search(
     graph = hybrid_search(
         query, store, G, top_k=top_k, fast=fast,
         kind=kind, file_pattern=file_pattern,
+        penalise_tests=not include_tests,
     )
     source_dir = str(Path(_get_db_path()).parent.parent) + "/"
     return graph.to_text(source_dir=source_dir)

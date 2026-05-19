@@ -41,6 +41,58 @@ STOPWORDS: frozenset[str] = frozenset({
     "only", "own", "same", "also", "what", "who", "whom",
 })
 
+# Multiplier applied to test files when penalty is active.
+# 0.0 = all tests excluded; 1.0 = no penalty.
+TEST_PENALTY_FACTOR = 0.3
+
+# Path components that identify test directories.
+_TEST_DIRS = frozenset({
+    "test", "tests", "spec", "specs", "tst", "__tests__",
+})
+
+# Additional directory names that clearly indicate test code.
+_TEST_DIR_PREFIXES = frozenset({
+    "testing", "testdata", "testutils", "testhelpers", "testfixtures",
+    "testharness", "testdriver", "testsuite",
+})
+
+# Directories ending in "test" that are common in test code bases.
+# Does NOT include common English words (protest, contest, detest, etc.).
+_TEST_DIR_SUFFIXES = frozenset({
+    "mytest", "unittest", "integrationtest", "unittests",
+})
+
+# Common directory names that should NOT be treated as test dirs
+# despite starting with "test".
+_TEST_DIR_FALSE_POSITIVES = frozenset({
+    "testimonial", "testament", "testify", "testimony",
+})
+
+# Filename patterns for test files (case-insensitive match).
+# Patterns use fnmatch; explicit extensions prevent false positives
+# like "protest.py" matching "*Test.*".
+_TEST_NAME_PATTERNS = frozenset({
+    # Python
+    "test_*.py", "*_test.py",
+    # JavaScript / TypeScript
+    "*.test.js", "*.test.ts", "*.test.jsx", "*.test.tsx",
+    "*.spec.js", "*.spec.ts", "*.spec.jsx", "*.spec.tsx",
+    "*.test", "*.spec",
+    # Java
+    "*Test.java", "*Tests.java", "*IT.java", "*Spec.java",
+    # Go
+    "*_test.go",
+    # Rust
+    "*_test.rs",
+    # C# / .NET
+    "*Tests.cs", "*Test.cs",
+    # Ruby
+    "*_spec.rb", "*_test.rb",
+})
+
+# Maven/Java src/test/java convention — path prefix.
+_SRC_TEST_PREFIXES = ("src/test/", "src\\test\\")
+
 
 # Data classes
 
@@ -265,6 +317,99 @@ def reciprocal_rank_fusion(
     return fused, breakdowns
 
 
+def _is_test_file(file_path: str) -> bool:
+    """Heuristic: is this file likely a test file?
+
+    Checks (in order):
+    1. Path contains a test directory component (test/, tests/, spec/, etc.)
+    2. File in Maven/Gradle src/test/java or similar
+    3. Filename matches a test-naming convention (*Test.java, test_*.py, *.spec.ts, etc.)
+    """
+    from fnmatch import fnmatch
+
+    # Normalise separators
+    fp = file_path.replace("\\", "/")
+
+    # 1. Test directory component
+    parts = fp.split("/")
+    for part in parts:
+        lower = part.lower()
+        if lower in _TEST_DIRS:
+            return True
+        if lower in _TEST_DIR_PREFIXES:
+            return True
+        if lower in _TEST_DIR_SUFFIXES:
+            return True
+        # Prefixed directories: integrationTest, e2eTest, test_utils, etc.
+        # Use a whitelist approach to avoid false positives.
+        if lower not in _TEST_DIR_FALSE_POSITIVES:
+            if lower.startswith("test"):
+                remainder = lower[4:]
+                if not remainder or remainder[0] in ("_", "-"):
+                    return True
+            if lower.endswith("test") and len(lower) > 4:
+                prefix = lower[:-4]
+                if prefix in ("integration", "unit", "e2e", "smoke", "regression"):
+                    return True
+
+    # 2. src/test/ prefix (Maven / Gradle convention)
+    for prefix in _SRC_TEST_PREFIXES:
+        if fp.startswith(prefix):
+            return True
+
+    # 3. Filename pattern (case-insensitive)
+    fname = parts[-1] if parts else ""
+    if not fname:
+        return False
+    fname_lower = fname.lower()
+    for pat in _TEST_NAME_PATTERNS:
+        if fnmatch(fname, pat):
+            return True
+        if fnmatch(fname_lower, pat):
+            return True
+        # Also try with lowercase pattern for patterns containing uppercase
+        if not pat.islower() and fnmatch(fname_lower, pat.lower()):
+            return True
+
+    return False
+
+
+def _generate_source_test_hint(
+    seed_nodes: list[tuple[str, float, dict]],
+) -> str:
+    """Generate a hint when results mix source and test files.
+
+    If results contain both source and test files, report the split
+    so the agent can decide whether to re-query with different filters.
+    """
+    if len(seed_nodes) <= 3:
+        return ""
+
+    test_count = 0
+    source_count = 0
+    for _, _, data in seed_nodes:
+        fp = data.get("file_path", "")
+        if _is_test_file(fp):
+            test_count += 1
+        else:
+            source_count += 1
+
+    if test_count == 0 or source_count == 0:
+        return ""
+
+    if test_count > source_count:
+        return (
+            f"Found {test_count} test-file results and {source_count} "
+            f"source-file results. Tests dominate the ranking. "
+            f"Use `--include-tests off` to focus on source files."
+        )
+    else:
+        return (
+            f"Found {source_count} source-file results and {test_count} "
+            f"test-file results."
+        )
+
+
 def extract_search_terms(query: str) -> list[str]:
     """Extract search terms by removing stopwords and short tokens."""
     return [
@@ -447,6 +592,7 @@ def hybrid_search(
     graph_hops: int = 2,
     kind: str | None = None,
     file_pattern: str | None = None,
+    penalise_tests: bool = True,
 ) -> SearchGraph:
     """5-signal search + shortest-path subgraph response.
 
@@ -464,6 +610,7 @@ def hybrid_search(
         kind: Filter by symbol kind (function, class, method, interface,"
             " enum, struct, trait, section).
         file_pattern: Filter by file path glob (e.g. "src/auth/*").
+        penalise_tests: Demote test files in ranking by TEST_PENALTY_FACTOR (default True).
 
     Returns:
         SearchGraph containing seed nodes, path nodes, and edges.
@@ -525,11 +672,32 @@ def hybrid_search(
         signal_names=SIGNAL_NAMES,
     )
 
+    # Stage 6.5: Test penalty — demote test files in ranking
+    if penalise_tests:
+        penalised: dict[str, float] = {}
+        kept: list[tuple[str, float, float]] = []
+        for node_id, rrf_score in fused:
+            data = G.nodes.get(node_id, {})
+            if not data:
+                kept.append((node_id, rrf_score, rrf_score))
+                continue
+            fp = data.get("file_path", "")
+            if _is_test_file(fp):
+                penalised_score = rrf_score * TEST_PENALTY_FACTOR
+                penalised[node_id] = penalised_score
+                kept.append((node_id, rrf_score, penalised_score))
+            else:
+                kept.append((node_id, rrf_score, rrf_score))
+        # Re-sort by effective (possibly penalised) score
+        kept.sort(key=lambda x: x[2], reverse=True)
+    else:
+        kept = [(nid, score, score) for nid, score in fused]
+
     # Stage 7: Seed node selection with optional filters
     import fnmatch
 
     seed_nodes: list[tuple[str, float, dict]] = []
-    for node_id, rrf_score in fused:
+    for node_id, _original_score, effective_score in kept:
         if len(seed_nodes) >= top_k:
             break
         data = G.nodes.get(node_id, {})
@@ -546,7 +714,7 @@ def hybrid_search(
             file_path = data.get("file_path", "")
             if not fnmatch.fnmatch(file_path, file_pattern):
                 continue
-        seed_nodes.append((node_id, rrf_score, data))
+        seed_nodes.append((node_id, effective_score, data))
 
     # Stage 8: MST-based subgraph construction
     seed_ids = [nid for nid, _, _ in seed_nodes]
@@ -590,6 +758,12 @@ def hybrid_search(
 
     # Generate filter hint
     hint = _generate_filter_hint(seed_nodes, kind, file_pattern, top_k)
+    if penalise_tests and not hint:
+        hint = _generate_source_test_hint(seed_nodes)
+    elif penalise_tests:
+        source_hint = _generate_source_test_hint(seed_nodes)
+        if source_hint:
+            hint = hint + " " + source_hint
     if hint:
         result.hint = hint
 

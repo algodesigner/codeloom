@@ -141,11 +141,18 @@ def build(
     default=None,
     help="Filter by file path glob (e.g. 'src/auth/*')",
 )
+@click.option(
+    "--include-tests/--no-include-tests",
+    "include_tests",
+    default=False,
+    help="Give test files equal ranking weight. By default, test files are demoted.",
+)
 @click.pass_context
 def search(
     ctx, query: str, db: str | None, top_k: int, source_dir: str,
     fast: bool, json_output: bool, kind: str | None = None,
     file_pattern: str | None = None,
+    include_tests: bool = False,
 ):
     """Search the code graph with hybrid vector + graph + keyword search."""
     from codeloom.query.hybrid import hybrid_search
@@ -180,6 +187,7 @@ def search(
         text_model=text_model,
         kind=kind,
         file_pattern=file_pattern,
+        penalise_tests=not include_tests,
     )
 
     source_dir_str = str(Path(source_dir).resolve()) + "/"
