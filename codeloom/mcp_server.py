@@ -102,11 +102,11 @@ def _load():
 
     db = _get_db_path()
     if not Path(db).exists():
-        cwd_parents = "/, ".join(p.name for p in [Path.cwd(), *Path.cwd().parents][:4])
+        cwd_parents = "/".join(p.name for p in [Path.cwd(), *Path.cwd().parents][:4])
         raise FileNotFoundError(
             f"Code graph not found at {db}. "
             f"Run 'codeloom build <dir>' first. "
-            f"Searched from cwd ({Path.cwd()}) and parents. "
+            f"Searched from cwd ({Path.cwd()}) and parents ({cwd_parents}). "
             f"Tip: set CODELOOM_DB env var to point to your knowledge.db."
         )
     _store = KnowledgeStore(db)
