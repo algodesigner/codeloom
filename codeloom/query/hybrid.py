@@ -272,9 +272,20 @@ def _generate_filter_hint(
     return ""
 
 
-def _cache_key(query: str, top_k: int) -> str:
-    """Generate cache key for a search query."""
-    raw = f"{query}|{top_k}"
+def _cache_key(
+    query: str, top_k: int, *,
+    penalise_tests: bool = True,
+    snippet_count: int = 0,
+    kind: str | None = None,
+    file_pattern: str | None = None,
+) -> str:
+    """Generate cache key for a search query.
+
+    Includes all parameters that affect the output so that different
+    filters, test-penalty settings, and snippet preferences don't share
+    a stale cache entry.
+    """
+    raw = f"{query}|{top_k}|{penalise_tests}|{snippet_count}|{kind}|{file_pattern}"
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -653,7 +664,13 @@ def hybrid_search(
     """
     # Stage 1: Cache check
     if use_cache:
-        key = _cache_key(query, top_k)
+        key = _cache_key(
+            query, top_k,
+            penalise_tests=penalise_tests,
+            snippet_count=snippet_count,
+            kind=kind,
+            file_pattern=file_pattern,
+        )
         if key in _search_cache:
             _search_cache.move_to_end(key)
             return _search_cache[key]
@@ -825,7 +842,13 @@ def hybrid_search(
 
     # Cache result
     if use_cache:
-        key = _cache_key(query, top_k)
+        key = _cache_key(
+            query, top_k,
+            penalise_tests=penalise_tests,
+            snippet_count=snippet_count,
+            kind=kind,
+            file_pattern=file_pattern,
+        )
         _search_cache[key] = result
         if len(_search_cache) > _CACHE_MAX_SIZE:
             _search_cache.popitem(last=False)

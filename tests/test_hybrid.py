@@ -6,10 +6,12 @@ from codeloom.query.hybrid import (
     SearchEdge,
     SearchGraph,
     SearchResult,
+    _cache_key,
     _generate_filter_hint,
     _generate_source_test_hint,
     _is_test_file,
     _read_snippet,
+    clear_search_cache,
     reciprocal_rank_fusion,
 )
 
@@ -1259,3 +1261,177 @@ class TestHybridSearchSnippets:
             seeds = [n for n in result.nodes if n.source == "seed"]
             assert len(seeds) == 1
             assert seeds[0].context_snippet == ""
+
+
+class TestCacheKey:
+    """Tests for cache key parameterisation."""
+
+    def test_same_query_same_params_same_key(self):
+        k1 = _cache_key("foo", 30, penalise_tests=True, snippet_count=3,
+                         kind=None, file_pattern=None)
+        k2 = _cache_key("foo", 30, penalise_tests=True, snippet_count=3,
+                         kind=None, file_pattern=None)
+        assert k1 == k2
+
+    def test_different_top_k_different_key(self):
+        k1 = _cache_key("foo", 30)
+        k2 = _cache_key("foo", 10)
+        assert k1 != k2
+
+    def test_different_penalise_tests_different_key(self):
+        k1 = _cache_key("foo", 30, penalise_tests=True)
+        k2 = _cache_key("foo", 30, penalise_tests=False)
+        assert k1 != k2
+
+    def test_different_snippet_count_different_key(self):
+        k1 = _cache_key("foo", 30, snippet_count=3)
+        k2 = _cache_key("foo", 30, snippet_count=0)
+        assert k1 != k2
+
+    def test_different_kind_different_key(self):
+        k1 = _cache_key("foo", 30, kind="function")
+        k2 = _cache_key("foo", 30, kind="class")
+        assert k1 != k2
+
+    def test_different_file_pattern_different_key(self):
+        k1 = _cache_key("foo", 30, file_pattern="src/*")
+        k2 = _cache_key("foo", 30, file_pattern="tests/*")
+        assert k1 != k2
+
+    def test_defaults_produce_same_key(self):
+        k1 = _cache_key("foo", 30)
+        k2 = _cache_key("foo", 30, penalise_tests=True, snippet_count=0,
+                         kind=None, file_pattern=None)
+        assert k1 == k2
+
+    def test_different_query_different_key(self):
+        k1 = _cache_key("foo", 30)
+        k2 = _cache_key("bar", 30)
+        assert k1 != k2
+
+
+class TestHybridSearchCacheNotStale:
+    """Integration test: different filter/flag combos get different cache entries."""
+
+    def _clear(self):
+        clear_search_cache()
+
+    def test_penalise_toggle_ignores_cache(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        G = nx.DiGraph()
+        G.add_node("tests/a.py:1", kind="function", file_path="tests/a.py",
+                    label="fn", start_line=1)
+        G.add_node("src/a.py:1", kind="function", file_path="src/a.py",
+                    label="fn", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            ("tests/a.py:1", 0.95),
+            ("src/a.py:1", 0.90),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            # First call — penalties ON
+            r1 = hybrid_search("fn", mock_store, G, top_k=10,
+                                penalise_tests=True, use_cache=True)
+            # Second call — penalties OFF, must NOT get cached r1
+            r2 = hybrid_search("fn", mock_store, G, top_k=10,
+                                penalise_tests=False, use_cache=True)
+            # With penalties ON, src beats tests (source files rank first)
+            seeds1 = [n for n in r1.nodes if n.source == "seed"]
+            seeds1 += [n for n in r1.isolated if n.source == "seed"]
+            # With penalties OFF, tests beat source
+            seeds2 = [n for n in r2.nodes if n.source == "seed"]
+            seeds2 += [n for n in r2.isolated if n.source == "seed"]
+
+            assert seeds1[0].node_id == "src/a.py:1"
+            assert seeds2[0].node_id == "tests/a.py:1"
+
+    def test_snippet_count_ignores_cache(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        a_path = tmp_path / "src" / "a.py"
+        a_path.parent.mkdir(parents=True, exist_ok=True)
+        a_path.write_text("def fn():\n    return 1\n")
+
+        G = nx.DiGraph()
+        G.add_node(str(a_path) + ":1", kind="function",
+                    file_path=str(a_path), label="fn", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [(str(a_path) + ":1", 0.9)]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            # First call — snippets on
+            r1 = hybrid_search("fn", mock_store, G, top_k=10,
+                                snippet_count=3, use_cache=True)
+            # Second call — snippets off, must NOT get cached r1 with snippets
+            r2 = hybrid_search("fn", mock_store, G, top_k=10,
+                                snippet_count=0, use_cache=True)
+
+            seeds1 = [n for n in r1.nodes if n.source == "seed"]
+            seeds1 += [n for n in r1.isolated if n.source == "seed"]
+            seeds2 = [n for n in r2.nodes if n.source == "seed"]
+            seeds2 += [n for n in r2.isolated if n.source == "seed"]
+
+            assert seeds1[0].context_snippet != ""
+            assert seeds2[0].context_snippet == ""
+
+    def test_kind_filter_ignores_cache(self, tmp_path):
+        self._clear()
+        from unittest.mock import MagicMock, patch
+
+        import networkx as nx
+
+        G = nx.DiGraph()
+        G.add_node("a.py:1", kind="function", file_path="a.py", label="fn", start_line=1)
+        G.add_node("b.py:1", kind="class", file_path="b.py", label="Klass", start_line=1)
+
+        mock_store = MagicMock()
+        mock_store.vector_search.return_value = [
+            ("a.py:1", 0.9),
+            ("b.py:1", 0.8),
+        ]
+        mock_store.keyword_search.return_value = []
+        mock_store.community_search.return_value = []
+
+        from codeloom.query.hybrid import clear_search_cache
+
+        with patch("codeloom.query.embeddings.embed_query_dual") as mock_eq:
+            mock_eq.return_value = {"code": None, "text": None}
+
+            from codeloom.query.hybrid import hybrid_search
+
+            # First call — kind=function
+            clear_search_cache()
+            r1 = hybrid_search("def", mock_store, G, top_k=10,
+                                kind="function", use_cache=True)
+            # Second call — kind=class, must NOT get cached r1
+            r2 = hybrid_search("def", mock_store, G, top_k=10,
+                                kind="class", use_cache=True)
+
+            ids1 = {n.node_id for n in r1.nodes if n.source == "seed"}
+            ids2 = {n.node_id for n in r2.nodes if n.source == "seed"}
+            assert "a.py:1" in ids1
+            assert "b.py:1" in ids2
+            assert "b.py:1" not in ids1
+            assert "a.py:1" not in ids2
