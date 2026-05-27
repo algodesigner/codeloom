@@ -727,6 +727,7 @@ def cline_uninstall():
 # ─── Aider CLI ───────────────────────────────────────────────────────────────
 
 
+
 @click.group(name="aider")
 def aider_group():
     """Manage per-project Aider CLI integration."""
@@ -841,6 +842,10 @@ def opencode_install(scope: str | None, force: bool = False):
     skill_dest = skill_dir / "SKILL.md"
     sync_skill_file(skill_source, skill_dest, force=force)
 
+    # Manage project context file
+    agents_md = project_root / "AGENTS.md"
+    sync_codeloom_context(agents_md)
+
     if scope == "user":
         mcp_config_path = Path.home() / ".config" / "opencode" / "config.json"
     else:
@@ -883,6 +888,9 @@ def opencode_uninstall(scope: str):
         human_ok(f"Removed {skill_dir}/")
     else:
         human_skip(f"{skill_dir}/ not found")
+
+    agents_md = project_root / "AGENTS.md"
+    uninstall_codeloom_context(agents_md)
 
     parent = skill_dir.parent
     if parent.exists() and not any(parent.iterdir()):

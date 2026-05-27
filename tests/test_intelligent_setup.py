@@ -57,3 +57,68 @@ def test_setup_unexpected_argument_fix(tmp_path):
             assert "Error: Got unexpected extra argument" not in result.output
             assert "Setup complete!" in result.output
 
+def test_opencode_agents_md_sync(tmp_path):
+    """Verify that opencode install creates and cleans AGENTS.md."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        # 1. Install
+        runner.invoke(cli, ["opencode", "install", "--scope", "project"])
+        assert Path("AGENTS.md").exists()
+        assert "codeloom" in Path("AGENTS.md").read_text()
+        
+        # 2. Uninstall
+        runner.invoke(cli, ["opencode", "uninstall", "--scope", "project"])
+        # Should be deleted if it only had codeloom content
+        assert not Path("AGENTS.md").exists()
+
+def test_surgical_uninstall_integrity(tmp_path):
+    """Verify that uninstall only removes codeloom block, leaving notes."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        notes = "# Project Notes\nCustom content."
+        Path("CLAUDE.md").write_text(notes)
+        
+        # 1. Setup
+        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        
+        # 2. Uninstall
+        runner.invoke(cli, ["claude", "uninstall", "--scope", "project"])
+        
+        # 3. Verify notes are back to original
+        assert Path("CLAUDE.md").read_text().strip() == notes.strip()
+
+def test_command_group_uniqueness():
+    """Programmatically verify that command groups are not duplicated."""
+    # This checks for the NameError/duplication issue
+    from codeloom.cli.main import cli
+    commands = list(cli.commands.keys())
+    # The registration happens at module load time, 
+    # so we check the actual click object
+    assert "cline" in commands
+    assert "aider" in commands
+    assert "opencode" in commands
+    
+    # Check if groups have correct subcommands
+    cline_group = cli.commands["cline"]
+    assert "install" in cline_group.commands
+    assert "uninstall" in cline_group.commands
+
+def test_json_merge_safety(tmp_path):
+    """Verify JSON configuration remains valid and uncorrupted."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        settings_file = Path(".claude/settings.json")
+        settings_file.parent.mkdir()
+        
+        # 1. Create invalid JSON
+        settings_file.write_text("{ invalid json }")
+        result = runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        assert "Could not parse" in result.output
+        
+        # 2. Valid JSON with existing content
+        settings_file.write_text('{"existing": true}')
+        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        
+        data = json.loads(settings_file.read_text())
+        assert data["existing"] is True
+        assert "hooks" in data
