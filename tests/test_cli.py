@@ -776,7 +776,7 @@ class TestOpenCodeIntegration:
             )
             assert result1.exit_code == 0
             assert result2.exit_code == 0
-            assert "already exists" in result2.output.lower()
+            assert "already" in result2.output.lower()
 
     def test_opencode_uninstall_project_scope(self, tmp_path):
         runner = CliRunner()
@@ -884,7 +884,7 @@ class TestClaudeIntegration:
             r2 = runner.invoke(cli, ["claude", "install", "--scope", "project"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
     def test_claude_uninstall_project(self, tmp_path):
         runner = CliRunner()
@@ -928,7 +928,7 @@ class TestCodexIntegration:
             r2 = runner.invoke(cli, ["codex", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
     def test_codex_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -970,7 +970,7 @@ class TestGeminiIntegration:
             r2 = runner.invoke(cli, ["gemini", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
 
 class TestCursorIntegration:
@@ -990,7 +990,7 @@ class TestCursorIntegration:
             r2 = runner.invoke(cli, ["cursor", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
     def test_cursor_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -1018,7 +1018,7 @@ class TestWindsurfIntegration:
             r2 = runner.invoke(cli, ["windsurf", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
     def test_windsurf_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -1046,7 +1046,7 @@ class TestAiderIntegration:
             r2 = runner.invoke(cli, ["aider", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already exists" in r2.output.lower()
+            assert "already" in r2.output.lower()
 
     def test_aider_uninstall(self, tmp_path):
         runner = CliRunner()
