@@ -43,8 +43,9 @@ def cli(ctx):
     default=None,
     help="Installation scope",
 )
+@click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 @click.pass_context
-def setup(ctx, scope: str | None):
+def setup(ctx, scope: str | None, force: bool):
     """One-step setup for all AI agent integrations.
 
     Detects installed editors (Claude Code, Cursor, Windsurf, etc.)
@@ -79,16 +80,16 @@ def setup(ctx, scope: str | None):
     # (skip if not applicable) though some currently prompt or assume paths.
     # In a real setup we might check if the editor is actually installed first.
 
-    ctx.invoke(claude_install, scope=scope)
-    ctx.invoke(opencode_install, scope=scope)
+    ctx.invoke(claude_install, scope=scope, force=force)
+    ctx.invoke(opencode_install, scope=scope, force=force)
 
     # Project-level only integrations
-    aider_install()
-    cline_install()
-    codex_install()
-    cursor_install()
-    gemini_install()
-    windsurf_install()
+    ctx.invoke(aider_install)
+    ctx.invoke(cline_install)
+    ctx.invoke(codex_install)
+    ctx.invoke(cursor_install)
+    ctx.invoke(gemini_install)
+    ctx.invoke(windsurf_install)
 
     human_done("Setup complete! All detected agents are now codeloom-aware.")
 

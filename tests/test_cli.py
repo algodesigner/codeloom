@@ -699,7 +699,8 @@ class TestClineIntegration:
             runner.invoke(cli, ["cline", "install"])
             result = runner.invoke(cli, ["cline", "install"])
             assert result.exit_code == 0
-            assert "already" in result.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in result.output.lower()
 
     def test_cline_install_appends_to_existing(self, tmp_path):
         runner = CliRunner()
@@ -884,7 +885,8 @@ class TestClaudeIntegration:
             r2 = runner.invoke(cli, ["claude", "install", "--scope", "project"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
     def test_claude_uninstall_project(self, tmp_path):
         runner = CliRunner()
@@ -928,7 +930,8 @@ class TestCodexIntegration:
             r2 = runner.invoke(cli, ["codex", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
     def test_codex_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -970,7 +973,8 @@ class TestGeminiIntegration:
             r2 = runner.invoke(cli, ["gemini", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
 
 class TestCursorIntegration:
@@ -990,7 +994,8 @@ class TestCursorIntegration:
             r2 = runner.invoke(cli, ["cursor", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
     def test_cursor_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -1018,7 +1023,8 @@ class TestWindsurfIntegration:
             r2 = runner.invoke(cli, ["windsurf", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
     def test_windsurf_uninstall(self, tmp_path):
         runner = CliRunner()
@@ -1046,7 +1052,8 @@ class TestAiderIntegration:
             r2 = runner.invoke(cli, ["aider", "install"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
-            assert "already" in r2.output.lower()
+            # Smart update logic: second run sees it's up-to-date
+            assert "up-to-date" in r2.output.lower()
 
     def test_aider_uninstall(self, tmp_path):
         runner = CliRunner()

@@ -20,6 +20,7 @@ from ._helpers import (
 def get_codeloom_context() -> str:
     """Returns the authoritative context rules for AI agents."""
     return (
+        "<!-- codeloom-start -->\n"
         "## codeloom\n\n"
         "This project has a codeloom code graph at `.codeloom/`.\n\n"
         "Rules:\n"
@@ -36,28 +37,183 @@ def get_codeloom_context() -> str:
         "- After modifying code files, run `codeloom build . --incremental` "
         "to keep your mental model and the graph current.\n"
         "- Use `codeloom stats` for structural overview (god nodes, "
-        "communities, density).\n\n"
+        "communities, density).\n"
+        "<!-- codeloom-end -->\n\n"
     )
 
 
-def prepend_codeloom_context(file_path: Path, marker: str = "## codeloom"):
-    """Prepends codeloom context to a file, or updates it if present."""
+def sync_codeloom_context(file_path: Path):
+    """Surgically updates or prepends codeloom context to a file."""
+    import re
+
     new_context = get_codeloom_context()
+    start_marker = "<!-- codeloom-start -->"
+    end_marker = "<!-- codeloom-end -->"
+
     if not file_path.exists():
         file_path.write_text(new_context)
         human_ok(f"{file_path.name} created with codeloom rules at the TOP.")
         return
 
     content = file_path.read_text()
-    if marker in content:
-        # If it exists, we don't move it to top to avoid messing with
-        # user edits, but we could. For now, let's just skip or update in place.
-        human_skip(f"{file_path.name} already contains codeloom section.")
+
+    # Determine ideal position (after frontmatter if present)
+    frontmatter_pattern = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
+    fm_match = frontmatter_pattern.match(content)
+    fm_text = fm_match.group(0) if fm_match else ""
+    main_content = content[len(fm_text):]
+
+    # Try to find the marked block in the whole file
+    block_pattern = re.compile(
+        f"{re.escape(start_marker)}.*?{re.escape(end_marker)}\\s*",
+        re.DOTALL,
+    )
+    match = block_pattern.search(content)
+
+    if match:
+        # Block found. Check if it's already identical
+        existing_block = match.group(0)
+        if existing_block.strip() == new_context.strip():
+            # Already identical. Now check positioning.
+            # It should be immediately after frontmatter.
+            if main_content.lstrip().startswith(start_marker):
+                msg = f"{file_path.name} context is up-to-date and at TOP."
+                human_skip(msg)
+                return
+            else:
+                # Move to correct position
+                # Remove block from wherever it is and insert after FM
+                clean_main = block_pattern.sub("", main_content).lstrip()
+                new_file_content = fm_text + new_context + clean_main
+                file_path.write_text(new_file_content)
+                human_ok(f"Moved codeloom context to TOP of {file_path.name}.")
+                return
+
+        # Content differs or position is wrong.
+        clean_main = block_pattern.sub("", main_content).lstrip()
+        new_file_content = fm_text + new_context + clean_main
+        file_path.write_text(new_file_content)
+        human_ok(f"Updated and moved codeloom context in {file_path.name}.")
+    else:
+        # No marked block found. Check for legacy unmarked header.
+        legacy_marker = "## codeloom"
+        if legacy_marker in content:
+            # Safety fallback: Prepend marked block after FM and
+            # leave legacy alone
+            new_file_content = fm_text + new_context + main_content
+            file_path.write_text(new_file_content)
+            human_warn(
+                f"Legacy context found in {file_path.name}. "
+                "Prepended new marked block at TOP."
+            )
+        else:
+            # Clean file. Just prepend after FM.
+            new_file_content = fm_text + new_context + main_content.lstrip()
+            file_path.write_text(new_file_content)
+            human_ok(f"Prepended codeloom rules to {file_path.name}.")
+
+
+def sync_skill_file(source: Path, dest: Path, force: bool = False):
+    """Updates a skill file if it's an official version or forced."""
+    import hashlib
+
+    if not source.exists():
+        human_warn(f"Skill source not found: {source}")
         return
 
-    # Prepend to ensure it's the first thing read
-    file_path.write_text(new_context + content)
-    human_ok(f"codeloom rules prepended to {file_path.name}.")
+    def get_hash(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest()
+
+    if not dest.exists():
+        import shutil
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        human_ok(f"Skill installed to {dest.parent}/")
+        return
+
+    # Compare hashes
+    src_hash = get_hash(source)
+    dst_hash = get_hash(dest)
+
+    if src_hash == dst_hash:
+        human_skip(f"Skill in {dest.parent} is already up-to-date.")
+        return
+
+    if force:
+        import shutil
+
+        shutil.copy2(source, dest)
+        human_ok(f"Force-updated skill in {dest.parent}/")
+    else:
+        # Check if destination is a "known" previous version
+        # (For now, we just warn if it's different and not identical)
+        human_warn(
+            f"Skill in {dest.parent}/ has manual edits. "
+            "Use --force to overwrite."
+        )
+
+
+def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
+    """Surgically merges data into a JSON file."""
+    import json
+
+    if not file_path.exists():
+        # Create new with proper structure
+        data = {}
+        curr = data
+        for k in key_path[:-1]:
+            curr[k] = {}
+            curr = curr[k]
+        curr[key_path[-1]] = new_data
+        file_path.write_text(json.dumps(data, indent=2) + "\n")
+        human_ok(f"Created {file_path.name} with codeloom config.")
+        return
+
+    try:
+        data = json.loads(file_path.read_text())
+    except Exception as e:
+        human_warn(f"Could not parse {file_path.name}: {e}. Skipping update.")
+        return
+
+    # Drill down to the target location
+    curr = data
+    for k in key_path[:-1]:
+        curr = curr.setdefault(k, {})
+
+    target_key = key_path[-1]
+
+    # In settings.json, hooks is usually a dict of lists
+    if target_key == "hooks" and isinstance(new_data, dict):
+        hooks = curr.setdefault("hooks", {})
+        for event, entry_list in new_data.items():
+            existing_event_hooks = hooks.setdefault(event, [])
+            # Check if an entry with "codeloom" already exists for this event
+            import json as _json
+
+            already = any(
+                "codeloom" in _json.dumps(h) for h in existing_event_hooks
+            )
+            if not already:
+                existing_event_hooks.extend(entry_list)
+                human_ok(f"Added codeloom {event} hook to {file_path.name}.")
+            else:
+                # Update the existing hook in place (optional, for now skip)
+                msg = f"codeloom {event} hook already in {file_path.name}."
+                human_skip(msg)
+    else:
+        # Standard dict update
+        if (
+            target_key in curr
+            and isinstance(curr[target_key], dict)
+            and isinstance(new_data, dict)
+        ):
+            curr[target_key].update(new_data)
+        else:
+            curr[target_key] = new_data
+        human_ok(f"Updated {target_key} in {file_path.name}.")
+
+    file_path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 # ─── Claude Code ─────────────────────────────────────────────────────────────
@@ -78,13 +234,12 @@ def claude_group():
     "'project' (.claude/skills/). "
     "If omitted, you will be prompted to choose.",
 )
-def claude_install(scope: str | None):
+@click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
+def claude_install(scope: str | None, force: bool = False):
     """Install Claude Code integration.
 
     Priority: 1) Skill  2) CLAUDE.md + hooks  3) MCP
     """
-    import json
-    import shutil
 
     project_root = Path.cwd()
 
@@ -109,106 +264,124 @@ def claude_install(scope: str | None):
     else:
         skill_dir = project_root / ".claude" / "skills" / "codeloom"
 
-    skill_dir.mkdir(parents=True, exist_ok=True)
     skill_dest = skill_dir / "SKILL.md"
-
-    if skill_source.exists():
-        shutil.copy2(skill_source, skill_dest)
-        human_ok(f"Skill installed to {skill_dir}/")
-    else:
-        human_warn("Skill source not found")
+    sync_skill_file(skill_source, skill_dest, force=force)
 
     # --- Priority 2: CLAUDE.md + hooks ---
     # 1. Write section to project CLAUDE.md
     claude_md = project_root / "CLAUDE.md"
-    prepend_codeloom_context(claude_md)
+    sync_codeloom_context(claude_md)
 
-    # 2. Write PreToolUse hook to .claude/settings.json
+    # 2. Write hooks to .claude/settings.json
     settings_dir = project_root / ".claude"
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
-    pre_hook_entry = {
-        "matcher": "Glob|Grep",
-        "hooks": [
+    new_hooks = {
+        "PreToolUse": [
             {
-                "type": "command",
-                "command": (
-                    "[ -f .codeloom/knowledge.db ] && echo "
-                    '\'{"hookSpecificOutput":{"hookEventName":"PreToolUse",'
-                    '"additionalContext":"codeloom: 5-signal code graph '
-                    'available. STOP grepping. Use `codeloom search '
-                    '\\"<query>\\"` for far better results. Use `codeloom '
-                    'impact \\"<id>\\"` before editing."'
-                    "\"}}' || true"
-                ),
+                "matcher": "Glob|Grep",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            "[ -f .codeloom/knowledge.db ] && echo "
+                            '\'{"hookSpecificOutput":{"hookEventName":'
+                            '"PreToolUse","additionalContext":"codeloom: '
+                            '5-signal code graph available. STOP grepping. '
+                            'Use `codeloom search \\"<query>\\"` for far '
+                            'better results. Use `codeloom impact '
+                            '\\"<id>\\"` before editing."'
+                            "\"}}' || true"
+                        ),
+                    }
+                ],
             }
         ],
-    }
-
-    post_hook_entry = {
-        "matcher": "Write|Edit",
-        "hooks": [
+        "PostToolUse": [
             {
-                "type": "command",
-                "command": (
-                    "echo '{\"hookSpecificOutput\":{\"hookEventName\":"
-                    "\"PostToolUse\",\"additionalContext\":\"codeloom: "
-                    "Changes detected. Run `codeloom build . --incremental` "
-                    "to update the code graph and your mental model.\"}}'"
-                ),
+                "matcher": "Write|Edit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            "echo '{\"hookSpecificOutput\":{\"hookEventName\":"
+                            "\"PostToolUse\",\"additionalContext\":\"codeloom: "
+                            "Changes detected. Run `codeloom build . "
+                            "--incremental` to update the code graph and "
+                            "your mental model.\"}}'"
+                        ),
+                    }
+                ],
             }
         ],
-    }
-
-    if settings_file.exists():
-        settings = json.loads(settings_file.read_text())
-    else:
-        settings = {}
-
-    hooks = settings.setdefault("hooks", {})
-
-    # PreToolUse
-    pre_hooks = hooks.setdefault("PreToolUse", [])
-    if any("codeloom" in json.dumps(h) for h in pre_hooks):
-        human_skip("PreToolUse hook already exists")
-    else:
-        pre_hooks.append(pre_hook_entry)
-        human_ok("PreToolUse hook added (Grep/Glob interception)")
-
-    # PostToolUse
-    post_hooks = hooks.setdefault("PostToolUse", [])
-    if any("codeloom" in json.dumps(h) for h in post_hooks):
-        human_skip("PostToolUse hook already exists")
-    else:
-        post_hooks.append(post_hook_entry)
-        human_ok("PostToolUse hook added (change detection)")
-
-    # 3. Write Stop hook for auto-rebuild
-    stop_hook_entry = {
-        "matcher": "*",
-        "hooks": [
+        "Stop": [
             {
-                "type": "command",
-                "command": auto_rebuild_command(),
-                "timeout": 10,
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": auto_rebuild_command(),
+                        "timeout": 10,
+                    }
+                ],
             }
-        ],
+        ]
     }
-    stop_hooks = hooks.setdefault("Stop", [])
-    stop_already = any(
-        "codeloom" in json.dumps(h) or "auto_rebuild" in json.dumps(h)
-        for h in stop_hooks
-    )
-    if stop_already:
-        human_skip("Stop hook (auto-rebuild) already exists")
-    else:
-        stop_hooks.append(stop_hook_entry)
-        human_ok("Stop hook (auto-rebuild) added")
 
-    settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+    merge_json_config(settings_file, new_hooks, ["hooks"])
 
     human_done("Done! Run 'codeloom build .' to create your first code graph.")
+
+
+def uninstall_codeloom_context(file_path: Path):
+    """Removes the marked codeloom block from a file."""
+    import re
+
+    if not file_path.exists():
+        human_skip(f"{file_path.name} not found")
+        return
+
+    content = file_path.read_text()
+    start_marker = "<!-- codeloom-start -->"
+    end_marker = "<!-- codeloom-end -->"
+
+    pattern = re.compile(
+        f"{re.escape(start_marker)}.*?{re.escape(end_marker)}\\s*",
+        re.DOTALL,
+    )
+
+    if pattern.search(content):
+        new_content = pattern.sub("", content).strip()
+        if new_content:
+            file_path.write_text(new_content + "\n")
+        else:
+            file_path.unlink()
+        human_ok(f"Removed codeloom context from {file_path.name}")
+    else:
+        # Fallback for legacy unmarked header
+        lines = content.splitlines(keepends=True)
+        filtered = []
+        skip = False
+        for line in lines:
+            if line.strip() == "## codeloom":
+                skip = True
+                continue
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
+                skip = False
+            if not skip:
+                filtered.append(line)
+
+        new_content = "".join(filtered).strip()
+        if new_content:
+            file_path.write_text(new_content + "\n")
+        else:
+            file_path.unlink()
+        human_ok(f"Removed legacy codeloom section from {file_path.name}")
 
 
 @claude_group.command(name="uninstall")
@@ -240,28 +413,10 @@ def claude_uninstall(scope: str):
 
     # 1. Remove section from CLAUDE.md
     claude_md = project_root / "CLAUDE.md"
-    if claude_md.exists():
-        lines = claude_md.read_text().splitlines(keepends=True)
-        filtered = []
-        skip = False
-        for line in lines:
-            if line.strip() == "## codeloom":
-                skip = True
-                continue
-            if (
-                skip
-                and line.startswith("##")
-                and "codeloom" not in line.lower()
-            ):
-                skip = False
-            if skip:
-                continue
-            filtered.append(line)
-        new_content = "".join(filtered).rstrip("\n") + "\n"
-        claude_md.write_text(new_content)
-        human_ok("codeloom section removed from CLAUDE.md")
+    uninstall_codeloom_context(claude_md)
 
     # 2. Remove hooks from .claude/settings.json
+
     settings_file = project_root / ".claude" / "settings.json"
     if settings_file.exists():
         settings = json.loads(settings_file.read_text())
@@ -298,74 +453,55 @@ def codex_group():
 @codex_group.command(name="install")
 def codex_install():
     """Install per-project Codex CLI integration (AGENTS.md + hooks.json)."""
-    import json
-
     human_header("Installing codeloom for Codex CLI...")
     project_root = Path.cwd()
 
     # 1. Write section to project AGENTS.md
     agents_md = project_root / "AGENTS.md"
-    prepend_codeloom_context(agents_md)
+    sync_codeloom_context(agents_md)
 
     # 2. Write PreToolUse hook to .codex/hooks.json
     hooks_dir = project_root / ".codex"
     hooks_dir.mkdir(parents=True, exist_ok=True)
     hooks_file = hooks_dir / "hooks.json"
 
-    hook_entry = {
-        "matcher": "Bash",
-        "hooks": [
+    new_hooks = {
+        "PreToolUse": [
             {
-                "type": "command",
-                "command": (
-                    "[ -f .codeloom/knowledge.db ] && echo "
-                    '\'{"hookSpecificOutput":{"hookEventName":"PreToolUse",'
-                    '"additionalContext":"codeloom: code graph available. '
-                    'Use `codeloom search \\"<query>\\"` (5-signal HybridRAG) '
-                    "instead of grepping raw files. You can also add "
-                    '`--kind function|class|method` or `--file \\"src/*\\"` '
-                    "to narrow results."
-                    "\"}}' || true"
-                ),
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            "[ -f .codeloom/knowledge.db ] && echo "
+                            '\'{"hookSpecificOutput":{"hookEventName":'
+                            '"PreToolUse","additionalContext":"codeloom: '
+                            'code graph available. Use `codeloom search '
+                            '\\"<query>\\"` (5-signal HybridRAG) instead '
+                            "of grepping raw files. You can also add "
+                            '`--kind function|class|method` or `--file '
+                            '\\"src/*\\"` to narrow results."'
+                            "\"}}' || true"
+                        ),
+                    }
+                ],
             }
         ],
-    }
-
-    if hooks_file.exists():
-        hooks_data = json.loads(hooks_file.read_text())
-    else:
-        hooks_data = {}
-
-    hooks = hooks_data.setdefault("hooks", {})
-    pre_hooks = hooks.setdefault("PreToolUse", [])
-
-    already = any("codeloom" in json.dumps(h) for h in pre_hooks)
-    if already:
-        human_skip("PreToolUse hook already exists")
-    else:
-        pre_hooks.append(hook_entry)
-        human_ok("PreToolUse hook added to .codex/hooks.json")
-
-    # 3. Write Stop hook for auto-rebuild
-    stop_hook_entry = {
-        "matcher": "*",
-        "hooks": [
+        "Stop": [
             {
-                "type": "command",
-                "command": auto_rebuild_command(),
-                "timeout": 10,
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": auto_rebuild_command(),
+                        "timeout": 10,
+                    }
+                ],
             }
-        ],
+        ]
     }
-    stop_hooks = hooks.setdefault("Stop", [])
-    stop_already = any("auto_rebuild" in json.dumps(h) for h in stop_hooks)
-    if stop_already:
-        human_skip("Stop hook (auto-rebuild) already exists")
-    else:
-        stop_hooks.append(stop_hook_entry)
-        human_ok("Stop hook (auto-rebuild) added")
 
-    hooks_file.write_text(json.dumps(hooks_data, indent=2) + "\n")
+    merge_json_config(hooks_file, new_hooks, ["hooks"])
 
     human_done()
 
@@ -374,34 +510,15 @@ def codex_install():
 def codex_uninstall():
     """Remove per-project Codex CLI integration."""
     import json
-
     human_header("Removing codeloom from Codex CLI")
     project_root = Path.cwd()
 
     # 1. Remove section from AGENTS.md
     agents_md = project_root / "AGENTS.md"
-    if agents_md.exists():
-        lines = agents_md.read_text().splitlines(keepends=True)
-        filtered = []
-        skip = False
-        for line in lines:
-            if line.strip() == "## codeloom":
-                skip = True
-                continue
-            if (
-                skip
-                and line.startswith("##")
-                and "codeloom" not in line.lower()
-            ):
-                skip = False
-            if skip:
-                continue
-            filtered.append(line)
-        new_content = "".join(filtered).rstrip("\n") + "\n"
-        agents_md.write_text(new_content)
-        human_ok("codeloom section removed from AGENTS.md")
+    uninstall_codeloom_context(agents_md)
 
     # 2. Remove hooks from .codex/hooks.json
+
     hooks_file = project_root / ".codex" / "hooks.json"
     if hooks_file.exists():
         hooks_data = json.loads(hooks_file.read_text())
@@ -439,76 +556,54 @@ def gemini_group():
 def gemini_install():
     """Install per-project Gemini CLI integration (GEMINI.md + BeforeTool
     hook)."""
-    import json
-
     human_header("Installing codeloom for Gemini CLI...")
     project_root = Path.cwd()
 
     # 1. Write section to project GEMINI.md
     gemini_md = project_root / "GEMINI.md"
-    prepend_codeloom_context(gemini_md)
+    sync_codeloom_context(gemini_md)
 
     # 2. Write BeforeTool hook to .gemini/settings.json
     settings_dir = project_root / ".gemini"
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
-    hook_entry = {
-        "matcher": "read_file",
-        "hooks": [
+    new_hooks = {
+        "BeforeTool": [
             {
-                "type": "command",
-                "command": (
-                    "[ -f .codeloom/knowledge.db ] && echo "
-                    '\'{"hookSpecificOutput":{"additionalContext":'
-                    '"codeloom: code graph available. '
-                    'Use `codeloom search \\"<query>\\"` (5-signal HybridRAG) '
-                    "instead of reading raw files. This single command covers "
-                    "vector, graph, keyword, and community search with RRF "
-                    "fusion."
-                    "\"}}' || true"
-                ),
+                "matcher": "read_file",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            "[ -f .codeloom/knowledge.db ] && echo "
+                            '\'{"hookSpecificOutput":{"additionalContext":'
+                            '"codeloom: code graph available. '
+                            'Use `codeloom search \\"<query>\\"` (5-signal '
+                            "HybridRAG) instead of reading raw files. This "
+                            "single command covers vector, graph, keyword, "
+                            'and community search with RRF fusion."'
+                            "\"}}' || true"
+                        ),
+                    }
+                ],
             }
         ],
-    }
-
-    if settings_file.exists():
-        settings = json.loads(settings_file.read_text())
-    else:
-        settings = {}
-
-    hooks = settings.setdefault("hooks", {})
-    before_hooks = hooks.setdefault("BeforeTool", [])
-
-    already = any("codeloom" in json.dumps(h) for h in before_hooks)
-    if already:
-        human_skip("BeforeTool hook already exists")
-    else:
-        before_hooks.append(hook_entry)
-        human_ok("BeforeTool hook added to .gemini/settings.json")
-
-    # 3. Write SessionEnd hook for auto-rebuild
-    session_end_entry = {
-        "matcher": "*",
-        "hooks": [
+        "SessionEnd": [
             {
-                "type": "command",
-                "command": auto_rebuild_command(),
-                "timeout": 10,
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": auto_rebuild_command(),
+                        "timeout": 10,
+                    }
+                ],
             }
-        ],
+        ]
     }
-    session_hooks = hooks.setdefault("SessionEnd", [])
-    session_already = any(
-        "auto_rebuild" in json.dumps(h) for h in session_hooks
-    )
-    if session_already:
-        human_skip("SessionEnd hook (auto-rebuild) already exists")
-    else:
-        session_hooks.append(session_end_entry)
-        human_ok("SessionEnd hook (auto-rebuild) added")
 
-    settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+    merge_json_config(settings_file, new_hooks, ["hooks"])
 
     human_done()
 
@@ -517,34 +612,15 @@ def gemini_install():
 def gemini_uninstall():
     """Remove per-project Gemini CLI integration."""
     import json
-
     human_header("Removing codeloom from Gemini CLI")
     project_root = Path.cwd()
 
     # 1. Remove section from GEMINI.md
     gemini_md = project_root / "GEMINI.md"
-    if gemini_md.exists():
-        lines = gemini_md.read_text().splitlines(keepends=True)
-        filtered = []
-        skip = False
-        for line in lines:
-            if line.strip() == "## codeloom":
-                skip = True
-                continue
-            if (
-                skip
-                and line.startswith("##")
-                and "codeloom" not in line.lower()
-            ):
-                skip = False
-            if skip:
-                continue
-            filtered.append(line)
-        new_content = "".join(filtered).rstrip("\n") + "\n"
-        gemini_md.write_text(new_content)
-        human_ok("codeloom section removed from GEMINI.md")
+    uninstall_codeloom_context(gemini_md)
 
     # 2. Remove hooks from .gemini/settings.json
+
     settings_file = project_root / ".gemini" / "settings.json"
     if settings_file.exists():
         settings = json.loads(settings_file.read_text())
@@ -588,24 +664,18 @@ def cursor_install():
     rules_dir.mkdir(parents=True, exist_ok=True)
     rules_file = rules_dir / "codeloom.mdc"
 
-    rule_content = (
-        "---\n"
-        "description: codeloom code graph search rules\n"
-        "globs: **/*\n"
-        "alwaysApply: true\n"
-        "---\n\n"
-    ) + get_codeloom_context()
-
-    if rules_file.exists():
-        content = rules_file.read_text()
-        if "codeloom" in content:
-            human_skip(".cursor/rules/codeloom.mdc already exists")
-        else:
-            rules_file.write_text(rule_content)
-            human_ok(".cursor/rules/codeloom.mdc updated")
-    else:
+    if not rules_file.exists():
+        rule_content = (
+            "---\n"
+            "description: codeloom code graph search rules\n"
+            "globs: **/*\n"
+            "alwaysApply: true\n"
+            "---\n\n"
+        ) + get_codeloom_context()
         rules_file.write_text(rule_content)
         human_ok(".cursor/rules/codeloom.mdc created")
+    else:
+        sync_codeloom_context(rules_file)
 
     human_done()
 
@@ -646,18 +716,7 @@ def windsurf_install():
     rules_dir.mkdir(parents=True, exist_ok=True)
     rules_file = rules_dir / "codeloom.md"
 
-    rule_content = get_codeloom_context()
-
-    if rules_file.exists():
-        content = rules_file.read_text()
-        if "codeloom" in content:
-            human_skip(".windsurf/rules/codeloom.md already exists")
-        else:
-            rules_file.write_text(rule_content)
-            human_ok(".windsurf/rules/codeloom.md updated")
-    else:
-        rules_file.write_text(rule_content)
-        human_ok(".windsurf/rules/codeloom.md created")
+    sync_codeloom_context(rules_file)
 
     human_done()
 
@@ -669,11 +728,7 @@ def windsurf_uninstall():
     project_root = Path.cwd()
 
     rules_file = project_root / ".windsurf" / "rules" / "codeloom.md"
-    if rules_file.exists():
-        rules_file.unlink()
-        human_ok(".windsurf/rules/codeloom.md removed")
-    else:
-        human_skip(".windsurf/rules/codeloom.md not found")
+    uninstall_codeloom_context(rules_file)
 
     human_done("codeloom integration removed.")
 
@@ -695,20 +750,7 @@ def cline_install():
 
     rules_file = project_root / ".clinerules"
 
-    rule_content = get_codeloom_context()
-
-    if rules_file.exists():
-        content = rules_file.read_text()
-        if "codeloom" in content:
-            human_skip(".clinerules section already exists")
-        else:
-            # Append to existing rules
-            with open(rules_file, "a") as f:
-                f.write("\n\n" + rule_content)
-            human_ok("codeloom section appended to .clinerules")
-    else:
-        rules_file.write_text(rule_content)
-        human_ok(".clinerules created")
+    sync_codeloom_context(rules_file)
 
     human_done()
 
@@ -720,37 +762,11 @@ def cline_uninstall():
     project_root = Path.cwd()
 
     rules_file = project_root / ".clinerules"
-    if rules_file.exists():
-        content = rules_file.read_text()
-        if "codeloom" in content:
-            # Remove codeloom section
-            lines = content.split("\n")
-            filtered = []
-            skip = False
-            for line in lines:
-                if line.strip() == "# codeloom":
-                    skip = True
-                    continue
-                if skip and line.startswith("# ") and "codeloom" not in line:
-                    skip = False
-                if not skip:
-                    filtered.append(line)
-            new_content = "\n".join(filtered).strip()
-            if new_content:
-                rules_file.write_text(new_content + "\n")
-                human_ok("codeloom section removed from .clinerules")
-            else:
-                rules_file.unlink()
-                human_ok(".clinerules removed (was only codeloom content)")
-        else:
-            human_skip("No codeloom section found in .clinerules")
-    else:
-        human_skip(".clinerules not found")
+    uninstall_codeloom_context(rules_file)
 
     human_done("codeloom integration removed.")
 
-
-# ─── Aider CLI ───────────────────────────────────────────────────────────────
+    human_done("codeloom integration removed.")
 
 
 @click.group(name="aider")
@@ -770,7 +786,7 @@ def aider_install():
 
     # 1. Write CONVENTIONS.md with codeloom rules
     conventions_md = project_root / "CONVENTIONS.md"
-    prepend_codeloom_context(conventions_md)
+    sync_codeloom_context(conventions_md)
 
     # 2. Ensure .aider.conf.yml loads CONVENTIONS.md via read:
     conf_file = project_root / ".aider.conf.yml"
@@ -803,28 +819,10 @@ def aider_uninstall():
 
     # 1. Remove section from CONVENTIONS.md
     conventions_md = project_root / "CONVENTIONS.md"
-    if conventions_md.exists():
-        lines = conventions_md.read_text().splitlines(keepends=True)
-        filtered = []
-        skip = False
-        for line in lines:
-            if line.strip() == "## codeloom":
-                skip = True
-                continue
-            if (
-                skip
-                and line.startswith("##")
-                and "codeloom" not in line.lower()
-            ):
-                skip = False
-            if skip:
-                continue
-            filtered.append(line)
-        new_content = "".join(filtered).rstrip("\n") + "\n"
-        conventions_md.write_text(new_content)
-        human_ok("codeloom section removed from CONVENTIONS.md")
+    uninstall_codeloom_context(conventions_md)
 
     # 2. Remove CONVENTIONS.md from .aider.conf.yml read list
+
     conf_file = project_root / ".aider.conf.yml"
     if conf_file.exists():
         conf = yaml.safe_load(conf_file.read_text()) or {}
@@ -864,16 +862,14 @@ def opencode_group():
     "or 'project' (.opencode/skills/). "
     "If omitted, you will be prompted to choose.",
 )
-def opencode_install(scope: str | None):
+@click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
+def opencode_install(scope: str | None, force: bool = False):
     """Install the codeloom skill for OpenCode.
 
     Writes the skill file to .opencode/skills/codeloom/SKILL.md or
     ~/.config/opencode/skills/codeloom/SKILL.md depending on scope.
     OpenCode discovers skills automatically from the skills directory.
     """
-    import json
-    import shutil
-
     project_root = Path.cwd()
 
     if scope is None:
@@ -896,16 +892,8 @@ def opencode_install(scope: str | None):
     else:
         skill_dir = project_root / ".opencode" / "skills" / "codeloom"
 
-    skill_dir.mkdir(parents=True, exist_ok=True)
     skill_dest = skill_dir / "SKILL.md"
-
-    if skill_dest.exists():
-        human_skip("SKILL.md already exists")
-    elif skill_source.exists():
-        shutil.copy2(skill_source, skill_dest)
-        human_ok(f"Skill installed to {skill_dir}/")
-    else:
-        human_warn("Skill source not found")
+    sync_skill_file(skill_source, skill_dest, force=force)
 
     # Auto-register MCP config for OpenCode
     if scope == "user":
@@ -914,34 +902,13 @@ def opencode_install(scope: str | None):
         mcp_config_path = project_root / "opencode.json"
 
     mcp_codeloom_config = {
-        "mcp": {
-            "codeloom": {
-                "type": "local",
-                "command": ["codeloom", "mcp"],
-            }
+        "codeloom": {
+            "type": "local",
+            "command": ["codeloom", "mcp"],
         }
     }
 
-    try:
-        mcp_config_path.parent.mkdir(parents=True, exist_ok=True)
-        if mcp_config_path.exists():
-            existing = json.loads(mcp_config_path.read_text())
-        else:
-            existing = {}
-        existing.setdefault("mcp", {}).update(mcp_codeloom_config["mcp"])
-        mcp_config_path.write_text(json.dumps(existing, indent=2) + "\n")
-        human_ok(f"MCP config written to {mcp_config_path}")
-    except Exception as e:
-        human_warn(f"Could not write MCP config: {e}")
-        human_ok("To add manually, add to opencode.json:")
-        click.echo(
-            '  "mcp": {\n'
-            '    "codeloom": {\n'
-            '      "type": "local",\n'
-            '      "command": ["codeloom", "mcp"]\n'
-            "    }\n"
-            "  }"
-        )
+    merge_json_config(mcp_config_path, mcp_codeloom_config, ["mcp"])
 
     human_done(
         "Done! OpenCode will discover the skill and MCP tools automatically."
