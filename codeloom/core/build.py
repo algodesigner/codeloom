@@ -342,20 +342,35 @@ def compute_edge_weights(
 def compute_pagerank(
     G: nx.DiGraph,
     personalization: dict[str, float] | None = None,
+    initial_scores: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """Compute PageRank importance scores for all nodes.
 
     Args:
         G: The code graph.
         personalization: Optional per-node bias (e.g., recency weighting).
+        initial_scores: Optional hot-start scores for faster convergence.
 
     Returns:
         Dict mapping node_id to importance score.
     """
     if len(G) == 0:
         return {}
+
+    # Filter initial scores to only include nodes present in the current graph
+    nstart = None
+    if initial_scores:
+        nstart = {n: s for n, s in initial_scores.items() if n in G}
+        if not nstart:
+            nstart = None
+
     try:
-        return nx.pagerank(G, personalization=personalization, max_iter=200)
+        return nx.pagerank(
+            G,
+            personalization=personalization,
+            nstart=nstart,
+            max_iter=200
+        )
     except nx.PowerIterationFailedConvergence:
         return {n: 1.0 / len(G) for n in G}
 

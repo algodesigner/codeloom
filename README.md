@@ -84,9 +84,13 @@ Text nodes (docs, comments, markdown) are embedded with `intfloat/multilingual-e
 
 When integrated with AI coding agents (Claude Code, Codex, etc.), codeloom **automatically rebuilds** the graph when code changes. The Stop/SessionEnd hook detects modified files via `git diff` and triggers an incremental rebuild in the background — zero manual intervention.
 
-### Smart Ignore
+### Git-Accelerated Deltas
 
-codeloom respects ignore patterns from three sources, all using **full gitignore spec** (negation `!`, `**` globs, directory-only patterns):
+Uses `git diff` to bypass heavy I/O of full filesystem scans. Only changed files are processed, enabling sub-second updates for typical logic changes. Toggle with `--git`.
+
+### Smart Ignore & Pruning
+
+codeloom respects ignore patterns from three sources and explicitly **prunes deleted files**, ensuring no "ghost nodes" remain in your graph after files are removed or renamed.
 
 | Source | Description |
 |--------|-------------|
@@ -96,7 +100,7 @@ codeloom respects ignore patterns from three sources, all using **full gitignore
 
 ### Incremental Builds
 
-SHA-256 content hashing per file. Only changed files are re-extracted and re-embedded. Unchanged files are merged from the existing graph — typically **95%+ faster** than a full rebuild.
+SHA-256 content hashing per file and **hot-start PageRank**. Only changed files are re-extracted and re-embedded, while previous importance scores are reused for rapid convergence — typically **95%+ faster** than a full rebuild.
 
 ### Memory Management
 
@@ -150,7 +154,11 @@ All commands output compact text by default (designed for AI agent consumption).
 
 | Command | Description |
 |---------|-------------|
-| `build <dir>` | Build code graph (`--incremental`) |
+| `build <dir>` | Build code graph (`--incremental`, `--git`) |
+| `watch <dir>` | Real-time file system monitor for instant graph sync |
+| `impact <id>` | Analyze "blast radius" — find all downstream dependents |
+| `dependencies <id>` | Analyze upstream dependencies for a given symbol |
+| `setup` | One-step automated setup for all detected agents |
 | `search <query>` | Hybrid vector + keyword search with subgraph and snippets (`--top-k`, `--fast`, `--kind`, `--file`, `--include-tests`, `--snippets`) |
 | `search-vector <query>` | Vector similarity only (code + text dual model) |
 | `search-keyword <query>` | FTS5 keyword matching only (BM25 ranking) |

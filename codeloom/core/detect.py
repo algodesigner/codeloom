@@ -165,10 +165,39 @@ def _classify_file(path: Path) -> str:
     return "other"
 
 
+def get_file_info(path: Path) -> DetectedFile | None:
+    """Return info for a single file, or None if it should be skipped."""
+    if not path.is_file():
+        return None
+    if _is_sensitive(path):
+        return None
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size == 0:
+        return None
+
+    ext = path.suffix.lower()
+    lang = EXT_TO_LANG.get(ext, "unknown")
+    file_type = _classify_file(path)
+
+    if file_type == "other":
+        return None
+
+    return DetectedFile(
+        path=path,
+        language=lang,
+        file_type=file_type,
+        size_bytes=size,
+    )
+
+
 def detect(
     root: Path,
     ignore_patterns: set[str] | None = None,
     max_file_size: int = 1_000_000,  # 1MB default
+    git: bool = False,
 ) -> DetectResult:
     """Scan directory tree and classify files.
 
@@ -181,6 +210,7 @@ def detect(
         root: Root directory to scan.
         ignore_patterns: Additional glob patterns to ignore.
         max_file_size: Skip files larger than this (bytes).
+        git: Use git status to find changed files (accelerator).
 
     Returns:
         DetectResult with classified files and skip reasons.
@@ -189,6 +219,25 @@ def detect(
     default_patterns = DEFAULT_IGNORE | (ignore_patterns or set())
     result = DetectResult(root=root)
 
+    # 1. Git-powered delta discovery (Accelerator)
+    if git:
+        from .git import get_git_deltas
+
+        deltas = get_git_deltas(root)
+        if deltas:
+            # For modified/added/renamed files, we need their info
+            files_to_check = set(deltas.modified + deltas.added)
+            for _, new_path in deltas.renamed:
+                files_to_check.add(new_path)
+
+            for path in sorted(files_to_check):
+                info = get_file_info(path)
+                if info:
+                    result.files.append(info)
+            return result
+        # Fall back to full scan if git failed or not a repo
+
+    # 2. Traditional full scan
     # Load gitignore-spec matchers
     gitignore_spec = _load_gitignore_spec(root)
     codeloom_spec = _load_codeloom_ignore_spec(root)
@@ -217,39 +266,19 @@ def detect(
             result.skipped.append(f"codeloom-ignored: {path}")
             continue
 
-        if _is_sensitive(path):
-            result.skipped.append(f"sensitive: {path}")
-            continue
-
-        try:
-            size = path.stat().st_size
-        except OSError:
-            result.skipped.append(f"unreadable: {path}")
-            continue
-
-        if size > max_file_size:
-            result.skipped.append(f"too_large ({size}B): {path}")
-            continue
-
-        if size == 0:
-            result.skipped.append(f"empty: {path}")
-            continue
-
-        ext = path.suffix.lower()
-        lang = EXT_TO_LANG.get(ext, "unknown")
-        file_type = _classify_file(path)
-
-        if file_type == "other":
-            result.skipped.append(f"unsupported: {path}")
-            continue
-
-        result.files.append(
-            DetectedFile(
-                path=path,
-                language=lang,
-                file_type=file_type,
-                size_bytes=size,
-            )
-        )
+        info = get_file_info(path)
+        if info:
+            if info.size_bytes > max_file_size:
+                result.skipped.append(f"too_large ({info.size_bytes}B): {path}")
+            else:
+                result.files.append(info)
+        else:
+            # Re-check sensitive or unsupported for logging skip reason
+            if _is_sensitive(path):
+                result.skipped.append(f"sensitive: {path}")
+            elif path.suffix.lower() not in EXT_TO_LANG:
+                result.skipped.append(f"unsupported: {path}")
+            elif path.stat().st_size == 0:
+                result.skipped.append(f"empty: {path}")
 
     return result

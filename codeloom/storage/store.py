@@ -136,6 +136,71 @@ class KnowledgeStore:
                 exc_info=True,
             )
 
+    def prune_files(self, file_paths: list[str]) -> int:
+        """Remove all nodes and edges associated with the given file paths.
+
+        Returns:
+            Number of nodes removed.
+        """
+        if not file_paths:
+            return 0
+
+        c = self.conn.cursor()
+
+        # 1. Identify nodes to be removed
+        placeholders = ",".join("?" for _ in file_paths)
+        nodes = c.execute(
+            f"SELECT id FROM nodes WHERE file_path IN ({placeholders})",
+            file_paths
+        ).fetchall()
+        node_ids = [n["id"] for n in nodes]
+
+        if not node_ids:
+            return 0
+
+        # 2. Delete nodes (cascading cleanup)
+        node_placeholders = ",".join("?" for _ in node_ids)
+
+        # Delete from community_members
+        c.execute(
+            f"DELETE FROM community_members "
+            f"WHERE node_id IN ({node_placeholders})",
+            node_ids,
+        )
+
+        # Delete from embeddings
+        c.execute(
+            f"DELETE FROM embeddings WHERE node_id IN ({node_placeholders})",
+            node_ids,
+        )
+
+        # Delete from FTS5 index if present
+        if self._has_fts():
+            c.execute(
+                f"DELETE FROM nodes_fts WHERE node_id IN ({node_placeholders})",
+                node_ids,
+            )
+
+        # Delete edges where this node is source or target
+        c.execute(
+            f"DELETE FROM edges WHERE source IN ({node_placeholders}) "
+            f"OR target IN ({node_placeholders})",
+            node_ids + node_ids,
+        )
+
+        # Finally delete nodes
+        c.execute(
+            f"DELETE FROM nodes WHERE id IN ({node_placeholders})",
+            node_ids,
+        )
+
+        self.conn.commit()
+        logger.info(
+            "Pruned %d nodes from %d files", len(node_ids), len(file_paths)
+        )
+        return len(node_ids)
+
+
     # --- Graph persistence ---
 
     def save_graph(self, G: nx.DiGraph) -> None:

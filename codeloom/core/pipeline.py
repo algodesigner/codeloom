@@ -18,14 +18,11 @@ import networkx as nx
 from codeloom.core.analyze import AnalysisResult, analyze
 from codeloom.core.build import (
     build_graph,
-    compute_edge_weights,
-    compute_pagerank,
     merge_tier3_nodes,
 )
 from codeloom.core.cluster import ClusterResult, hierarchical_cluster
 from codeloom.core.detect import DetectResult, detect
 from codeloom.core.extract import ExtractionResult
-from codeloom.core.ts_extract import extract_file_ts as extract_file
 from codeloom.storage.store import KnowledgeStore
 
 logger = logging.getLogger(__name__)
@@ -78,25 +75,28 @@ def run_pipeline(
     on_progress: callable | None = None,
     incremental: bool = False,
     lang: str = "auto",
+    git: bool = False,
 ) -> PipelineResult:
-    """Run the full code graph build pipeline.
+    """Execute the full code graph construction pipeline.
 
     Args:
-        source_dir: Directory to analyze.
-        output_dir: Where to store the database (default: source_dir/.codeloom).
-        embed: Whether to generate embeddings (requires sentence-transformers).
-        model_name: Sentence-transformers model name.
-        resolutions: Leiden resolution parameters for hierarchical clustering.
-        max_file_size: Skip files larger than this.
-        on_progress: Callback(stage: str, detail: str) for progress updates.
+        source_dir: Directory to scan.
+        output_dir: Directory to save the database.
+        embed: If true, generate vector embeddings.
+        model_name: Optional embedding model name.
+        max_file_size: Max file size in bytes.
+        on_progress: Progress callback.
         incremental: Skip unchanged files (based on content hash).
-        lang: Language mode — "auto" (detect from text nodes), "en"
-            (English-only models), or "multilingual" (force multilingual
-            text model).
-
-    Returns:
-        PipelineResult with all intermediate and final results.
+        lang: Text embedding language mode.
+        git: Use git deltas for incremental builds.
     """
+
+    import networkx as nx
+
+    from codeloom.core.extract import extract_file
+
+    from .build import compute_edge_weights, compute_pagerank
+
     source_dir = Path(source_dir).resolve()
     if output_dir is None:
         output_dir = source_dir / ".codeloom"
@@ -125,11 +125,13 @@ def run_pipeline(
     # Stage 1: Detect files
     _start_stage("detect")
     _progress("detect", f"Scanning {source_dir}")
-    result.detect_result = detect(source_dir, max_file_size=max_file_size)
+    result.detect_result = detect(
+        source_dir, max_file_size=max_file_size, git=git
+    )
     _end_stage("detect")
     _progress("detect", f"Found {len(result.detect_result.files)} files")
 
-    if not result.detect_result.files:
+    if not result.detect_result.files and not git:
         store.set_meta("status", "empty")
         store.close()
         return result
@@ -143,6 +145,18 @@ def run_pipeline(
 
     # Load previous file hashes for incremental build
     prev_hashes: dict[str, str] = {}
+    deleted_files: list[str] = []
+
+    # Git renames (Phase 2 logic)
+    if git:
+        from .git import get_git_deltas
+        deltas = get_git_deltas(source_dir)
+        if deltas:
+            deleted_files = [str(f) for f in deltas.deleted]
+            # Phase 2 TODO: handle renamed_files to update path in DB
+            # without re-extracting. For now, modified/added are handled
+            # by detect() correctly
+
     if incremental:
         raw = store.get_meta("file_hashes", "{}")
         try:
@@ -150,8 +164,18 @@ def run_pipeline(
         except (json.JSONDecodeError, TypeError):
             prev_hashes = {}
 
+        # Identify deleted files (only if not already found via git)
+        if not git:
+            current_files = {str(f.path) for f in result.detect_result.files}
+            deleted_files = [f for f in prev_hashes if f not in current_files]
+
+        if deleted_files:
+            _progress("extract", f"Pruning {len(deleted_files)} deleted files")
+            store.prune_files(deleted_files)
+
     new_hashes: dict[str, str] = {}
     skipped_count = 0
+
 
     for f in result.detect_result.files:
         try:
@@ -248,7 +272,19 @@ def run_pipeline(
     # Stage 4: PageRank
     _start_stage("pagerank")
     _progress("pagerank", "Computing importance scores")
-    result.pagerank = compute_pagerank(result.graph)
+
+    # Hot-start PageRank for incremental builds
+    initial_scores = None
+    if incremental:
+        initial_scores = {
+            n: d.get("pagerank", 0.0)
+            for n, d in result.graph.nodes(data=True)
+            if "pagerank" in d
+        }
+
+    result.pagerank = compute_pagerank(
+        result.graph, initial_scores=initial_scores
+    )
     for node_id, score in result.pagerank.items():
         if result.graph.has_node(node_id):
             result.graph.nodes[node_id]["pagerank"] = score
@@ -418,6 +454,9 @@ def run_pipeline(
     if new_hashes:
         # Merge with previous hashes (keep unchanged files)
         all_hashes = {**prev_hashes, **new_hashes}
+        # Remove deleted files from hashes
+        for df in deleted_files:
+            all_hashes.pop(df, None)
         store.set_meta("file_hashes", json.dumps(all_hashes))
 
     # Build vector index

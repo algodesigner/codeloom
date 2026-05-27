@@ -103,6 +103,80 @@ def setup(ctx, scope: str | None):
     default=None,
     help="Output directory for the database",
 )
+@click.pass_context
+def watch(ctx, source_dir: str, output: str | None):
+    """Watch for file changes and update the code graph in real-time.
+
+    Uses the watchdog library to monitor the source directory and
+    triggers incremental builds on file save events.
+    """
+    import time
+
+    from watchdog.events import FileSystemEventHandler
+    from watchdog.observers import Observer
+
+    from codeloom.core.pipeline import run_pipeline
+
+    from ._helpers import human_header, human_ok
+
+    source_path = Path(source_dir).resolve()
+    human_header(f"Watching {source_path} for changes...")
+
+    class RebuildHandler(FileSystemEventHandler):
+        def __init__(self):
+            self.last_rebuild = 0
+            self.cooldown = 1.0  # seconds
+
+        def on_modified(self, event):
+            if event.is_directory:
+                return
+            # Check extension
+            from codeloom.core.detect import EXT_TO_LANG
+
+            if Path(event.src_path).suffix.lower() not in EXT_TO_LANG:
+                return
+
+            now = time.time()
+            if now - self.last_rebuild < self.cooldown:
+                return
+
+            msg = f"Change detected in {Path(event.src_path).name}. Updating..."
+            human_ok(msg)
+            try:
+                run_pipeline(
+                    str(source_path),
+                    output_dir=output,
+                    incremental=True,
+                    embed=True,
+                    git=True,  # Use git accelerator for speed
+                )
+                self.last_rebuild = time.time()
+            except Exception as e:
+                click.echo(f"  Error during update: {e}", err=True)
+
+    event_handler = RebuildHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(source_path), recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+
+
+
+@cli.command()
+@click.argument("source_dir", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Output directory for the database",
+)
 @click.option(
     "--model",
     default=None,
@@ -128,6 +202,11 @@ def setup(ctx, scope: str | None):
     type=click.Choice(["auto", "en", "multilingual"]),
     help="Language mode for text embeddings",
 )
+@click.option(
+    "--git",
+    is_flag=True,
+    help="Use git status to find changed files (accelerator)",
+)
 @click.pass_context
 def build(
     ctx,
@@ -137,6 +216,7 @@ def build(
     max_file_size: int,
     incremental: bool,
     lang: str,
+    git: bool,
 ):
     """Build code graph from a source directory."""
     import sys
@@ -156,6 +236,7 @@ def build(
         on_progress=_progress,
         incremental=incremental,
         lang=lang,
+        git=git,
     )
 
     # Capture summary values before releasing memory

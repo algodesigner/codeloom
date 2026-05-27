@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codeloom"
-version = "0.1.2"
+version = "0.1.3"
 description = "Local-first code graph builder with 5-signal hybrid search for AI coding agents"
 license = "MIT"
 requires-python = ">=3.10"
