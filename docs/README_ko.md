@@ -14,6 +14,10 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
 </p>
 
+<p align="center">
+  <img src="assets/codeloom.jpeg" alt="codeloom visualization" width="800">
+</p>
+
 ---
 
 ## 왜 codeloom인가?
