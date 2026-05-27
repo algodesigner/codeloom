@@ -16,6 +16,50 @@ from ._helpers import (
     human_warn,
 )
 
+
+def get_codeloom_context() -> str:
+    """Returns the authoritative context rules for AI agents."""
+    return (
+        "## codeloom\n\n"
+        "This project has a codeloom code graph at `.codeloom/`.\n\n"
+        "Rules:\n"
+        "- **You MUST use `codeloom search \"<query>\"` as your primary search "
+        "method.** It runs 5-signal HybridRAG (vector + graph + keyword + "
+        "community → RRF fusion) which is far more accurate than grep.\n"
+        "- **Analyze impact before editing.** Use `codeloom impact \"<id>\"` "
+        "to see the blast radius of your changes.\n"
+        "- **Drill down into connections.** Use `codeloom node \"<id>\"` and "
+        "`codeloom dependencies \"<id>\"` to understand structural "
+        "requirements.\n"
+        "- Before grepping raw files, you MUST run `codeloom search` first. "
+        "Only fall back to Grep if the code graph has no results.\n"
+        "- After modifying code files, run `codeloom build . --incremental` "
+        "to keep your mental model and the graph current.\n"
+        "- Use `codeloom stats` for structural overview (god nodes, "
+        "communities, density).\n\n"
+    )
+
+
+def prepend_codeloom_context(file_path: Path, marker: str = "## codeloom"):
+    """Prepends codeloom context to a file, or updates it if present."""
+    new_context = get_codeloom_context()
+    if not file_path.exists():
+        file_path.write_text(new_context)
+        human_ok(f"{file_path.name} created with codeloom rules at the TOP.")
+        return
+
+    content = file_path.read_text()
+    if marker in content:
+        # If it exists, we don't move it to top to avoid messing with
+        # user edits, but we could. For now, let's just skip or update in place.
+        human_skip(f"{file_path.name} already contains codeloom section.")
+        return
+
+    # Prepend to ensure it's the first thing read
+    file_path.write_text(new_context + content)
+    human_ok(f"codeloom rules prepended to {file_path.name}.")
+
+
 # ─── Claude Code ─────────────────────────────────────────────────────────────
 
 
@@ -77,54 +121,14 @@ def claude_install(scope: str | None):
     # --- Priority 2: CLAUDE.md + hooks ---
     # 1. Write section to project CLAUDE.md
     claude_md = project_root / "CLAUDE.md"
-    marker = "## codeloom"
-    section = (
-        "\n## codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to Grep if the code graph has no results.\n"
-        "- When you know what kind of symbol you need, add `--kind` to your "
-        "search: "
-        '`codeloom search \\"query\\" --kind function` filters to functions '
-        "only. "
-        "Valid kinds: function, class, method, interface, enum, "
-        "struct, trait, section.\n"
-        "- When you know where the code lives, add `--file` with a glob "
-        "pattern: "
-        '`codeloom search \\"query\\" --file \\"src/auth/*\\"`.\n'
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density)\n"
-    )
-
-    if claude_md.exists():
-        content = claude_md.read_text()
-        if marker in content:
-            human_skip("CLAUDE.md section already exists")
-        else:
-            claude_md.write_text(content + section)
-            human_ok("CLAUDE.md section added")
-    else:
-        claude_md.write_text(section.lstrip("\n"))
-        human_ok("CLAUDE.md created")
+    prepend_codeloom_context(claude_md)
 
     # 2. Write PreToolUse hook to .claude/settings.json
     settings_dir = project_root / ".claude"
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
-    hook_entry = {
+    pre_hook_entry = {
         "matcher": "Glob|Grep",
         "hooks": [
             {
@@ -132,12 +136,26 @@ def claude_install(scope: str | None):
                 "command": (
                     "[ -f .codeloom/knowledge.db ] && echo "
                     '\'{"hookSpecificOutput":{"hookEventName":"PreToolUse",'
-                    '"additionalContext":"codeloom: code graph available. '
-                    'Use `codeloom search \\"<query>\\"` (5-signal HybridRAG) '
-                    "instead of grepping raw files. You can also add "
-                    '`--kind function|class|method` or `--file \\"src/*\\"` '
-                    "to narrow results."
+                    '"additionalContext":"codeloom: 5-signal code graph '
+                    'available. STOP grepping. Use `codeloom search '
+                    '\\"<query>\\"` for far better results. Use `codeloom '
+                    'impact \\"<id>\\"` before editing."'
                     "\"}}' || true"
+                ),
+            }
+        ],
+    }
+
+    post_hook_entry = {
+        "matcher": "Write|Edit",
+        "hooks": [
+            {
+                "type": "command",
+                "command": (
+                    "echo '{\"hookSpecificOutput\":{\"hookEventName\":"
+                    "\"PostToolUse\",\"additionalContext\":\"codeloom: "
+                    "Changes detected. Run `codeloom build . --incremental` "
+                    "to update the code graph and your mental model.\"}}'"
                 ),
             }
         ],
@@ -149,14 +167,22 @@ def claude_install(scope: str | None):
         settings = {}
 
     hooks = settings.setdefault("hooks", {})
-    pre_hooks = hooks.setdefault("PreToolUse", [])
 
-    already = any("codeloom" in json.dumps(h) for h in pre_hooks)
-    if already:
+    # PreToolUse
+    pre_hooks = hooks.setdefault("PreToolUse", [])
+    if any("codeloom" in json.dumps(h) for h in pre_hooks):
         human_skip("PreToolUse hook already exists")
     else:
-        pre_hooks.append(hook_entry)
-        human_ok("PreToolUse hook added")
+        pre_hooks.append(pre_hook_entry)
+        human_ok("PreToolUse hook added (Grep/Glob interception)")
+
+    # PostToolUse
+    post_hooks = hooks.setdefault("PostToolUse", [])
+    if any("codeloom" in json.dumps(h) for h in post_hooks):
+        human_skip("PostToolUse hook already exists")
+    else:
+        post_hooks.append(post_hook_entry)
+        human_ok("PostToolUse hook added (change detection)")
 
     # 3. Write Stop hook for auto-rebuild
     stop_hook_entry = {
@@ -279,38 +305,7 @@ def codex_install():
 
     # 1. Write section to project AGENTS.md
     agents_md = project_root / "AGENTS.md"
-    marker = "## codeloom"
-    section = (
-        "\n## codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to grep if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density)\n"
-    )
-
-    if agents_md.exists():
-        content = agents_md.read_text()
-        if marker in content:
-            human_skip("AGENTS.md section already exists")
-        else:
-            agents_md.write_text(content + section)
-            human_ok("codeloom section added to AGENTS.md")
-    else:
-        agents_md.write_text(section.lstrip("\n"))
-        human_ok("AGENTS.md created")
+    prepend_codeloom_context(agents_md)
 
     # 2. Write PreToolUse hook to .codex/hooks.json
     hooks_dir = project_root / ".codex"
@@ -451,38 +446,7 @@ def gemini_install():
 
     # 1. Write section to project GEMINI.md
     gemini_md = project_root / "GEMINI.md"
-    marker = "## codeloom"
-    section = (
-        "\n## codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before reading raw files, you MUST run `codeloom search` first. "
-        "Only fall back to file reads if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density)\n"
-    )
-
-    if gemini_md.exists():
-        content = gemini_md.read_text()
-        if marker in content:
-            human_skip("GEMINI.md section already exists")
-        else:
-            gemini_md.write_text(content + section)
-            human_ok("codeloom section added to GEMINI.md")
-    else:
-        gemini_md.write_text(section.lstrip("\n"))
-        human_ok("GEMINI.md created")
+    prepend_codeloom_context(gemini_md)
 
     # 2. Write BeforeTool hook to .gemini/settings.json
     settings_dir = project_root / ".gemini"
@@ -630,25 +594,7 @@ def cursor_install():
         "globs: **/*\n"
         "alwaysApply: true\n"
         "---\n\n"
-        "# codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to grep/find if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density).\n"
-    )
+    ) + get_codeloom_context()
 
     if rules_file.exists():
         content = rules_file.read_text()
@@ -700,26 +646,7 @@ def windsurf_install():
     rules_dir.mkdir(parents=True, exist_ok=True)
     rules_file = rules_dir / "codeloom.md"
 
-    rule_content = (
-        "# codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to grep/find if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density).\n"
-    )
+    rule_content = get_codeloom_context()
 
     if rules_file.exists():
         content = rules_file.read_text()
@@ -768,26 +695,7 @@ def cline_install():
 
     rules_file = project_root / ".clinerules"
 
-    rule_content = (
-        "# codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to grep/find if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density).\n"
-    )
+    rule_content = get_codeloom_context()
 
     if rules_file.exists():
         content = rules_file.read_text()
@@ -862,38 +770,7 @@ def aider_install():
 
     # 1. Write CONVENTIONS.md with codeloom rules
     conventions_md = project_root / "CONVENTIONS.md"
-    marker = "## codeloom"
-    section = (
-        "\n## codeloom\n\n"
-        "This project has a codeloom code graph at `.codeloom/`.\n\n"
-        "Rules:\n"
-        '- **You MUST use `codeloom search "<query>"` as the primary search '
-        "method.** "
-        "It runs 5-signal HybridRAG (vector + graph + keyword + community → "
-        "RRF fusion) "
-        "in a single call — do not run separate community or keyword "
-        "searches.\n"
-        "- Before grepping raw files, you MUST run `codeloom search` first. "
-        "Only fall back to grep/find if the code graph has no results.\n"
-        "- After modifying code files, run "
-        "`codeloom build . --incremental` to keep the graph current.\n"
-        "- Use `codeloom communities` (without `--search`) only when you "
-        "need to "
-        "list or browse the community structure, not as a search substitute.\n"
-        "- Use `codeloom stats` for structural overview "
-        "(god nodes, communities, density).\n"
-    )
-
-    if conventions_md.exists():
-        content = conventions_md.read_text()
-        if marker in content:
-            human_skip("CONVENTIONS.md section already exists")
-        else:
-            conventions_md.write_text(content + section)
-            human_ok("codeloom section added to CONVENTIONS.md")
-    else:
-        conventions_md.write_text(section.lstrip("\n"))
-        human_ok("CONVENTIONS.md created")
+    prepend_codeloom_context(conventions_md)
 
     # 2. Ensure .aider.conf.yml loads CONVENTIONS.md via read:
     conf_file = project_root / ".aider.conf.yml"

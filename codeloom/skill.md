@@ -9,79 +9,38 @@ metadata:
 
 # codeloom
 
-codeloom is NOT a search engine that finds answers. It is a **map builder** — it tells you **what the codebase looks like** and **what to read next**. Use it as the starting point of every investigation, then drill deeper with Read and Grep.
+Builds code graphs from source code and documents. Searches with 5-signal hybrid search (code vector + text vector + graph traversal + FTS5 keyword + community → RRF fusion). Supports 17 languages with deep AST extraction. 100% local.
 
-Builds code graphs from source code and documents. Hybrid search (vector + FTS5 keyword → RRF fusion) with MST-based subgraph response showing how results connect. Supports 17 languages with deep AST extraction. 100% local.
-
-## When to Use What
-
-| Task | codeloom | Grep | Read |
-|------|-----------|------|------|
-| "Where is it?" (file discovery) | **best** | moderate | no |
-| "What's the structure?" (architecture) | good | moderate | **best** |
-| "What exactly exists?" (symbols, types) | moderate | **best** | good |
-| "How does it connect?" (dependencies) | good | good | **best** |
-
-**codeloom excels at**: Cross-service file discovery, document structure, ranking what to read first.
-**Grep excels at**: Finding specific type/const/function definitions.
-**Read excels at**: Understanding complete function bodies and data flow.
-
-## Recommended Workflow
-
-```
-Step 1: codeloom search → identify relevant files and services
-Step 2: Read → deeply understand architecture and data flow
-Step 3: Grep → find specific symbols, types, constants
-```
-
-Always start with codeloom to get the big picture, then use Read/Grep for details.
+**IMPORTANT: Always use `--json` flag when running via CLI.**
 
 ## Search (PRIMARY — use this first)
 
 ```bash
-codeloom search "database connection pool"       # default: 30 results, 3 snippets
-codeloom search "auth" --fast                    # text model only, faster
-codeloom search "error handling" --top-k 10      # custom count
-codeloom search "handler" --kind function        # filter by symbol kind
-codeloom search "api" --file "src/auth/*"        # filter by file path
-codeloom search "Optimiser" --snippets 5         # show 5 source snippets
-codeloom search "login" --include-tests          # give tests equal ranking
+codeloom --json search "database connection pool"       # default: 80 results
+codeloom --json search "auth" --fast                    # text model only, faster
+codeloom --json search "payment billing" --snippets 5   # with source snippets
+codeloom --json search "error handling" --kind function # filter by kind
 ```
 
-Response (compact text — seeds + scores + snippets + subgraph edges):
-```
-seeds:
-core/build.py:15 (score: 0.047)
-  │ def build_graph(self, sources: list[Path]) -> Graph:
-  │     """Assemble the code graph from extracted units."""
-  │     G = nx.DiGraph()
-storage/store.py:20 (score: 0.032)
-  │ class KnowledgeStore:
+## Impact Analysis (Blast Radius)
 
-edges:
-core/build.py:15 -calls-> storage/store.py:20
-core/build.py:0 -co_change-> storage/store.py:0
-core/build.py:0 -defines-> core/build.py:15
-```
-
-- `seeds`: Node IDs (file:line format) found by vector + keyword search. Use to read the code directly via `Read(file, offset=line)`.
-- `edges`: Subgraph showing how seeds connect through the code graph. Intermediate nodes (e.g. `core/build.py:0` module) appear in edges but not in seeds.
-- Edge relations: `calls`, `imports`, `inherits`, `defines`, `co_change` (files frequently committed together), `contains`, `references`.
-- Node IDs use relative paths with 1-based line numbers (file:line). Use `node` tool for details.
-
-## Important: Query in English
-
-**Always query in English for best results.** Non-English queries (Japanese, Korean, Chinese, etc.) return significantly lower precision. If the user's request is in another language, translate the key concepts to English before searching.
+**Run this BEFORE you edit code.** It traces downstream dependents.
 
 ```bash
-# Good — English query
-codeloom search "subscription promotion"     # score: 0.047, precise results
+codeloom --json impact "StripeClient"
+codeloom --json impact "AuthService.validate_token" --max-depth 5
+```
 
-# Bad — Korean query
-codeloom search "프로모션 구독 할인"           # score: 0.028, irrelevant results
+## Dependency Analysis
+
+**Run this to understand what a symbol needs.** It traces upstream dependencies.
+
+```bash
+codeloom --json dependencies "CheckoutHandler"
 ```
 
 ## Search Strategy — Drill Down, Don't Stop at First Results
+
 
 **Don't search once and stop.** Use results to discover domain-specific terms, then search deeper. The goal is to build a mental map, not to find a single answer.
 

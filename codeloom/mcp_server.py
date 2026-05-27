@@ -32,12 +32,19 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP(
     "codeloom",
     instructions=(
-        "Local-first code graph for code and document search. "
-        "START with 'search' — it returns seeds (file:line node IDs) and "
-        "a subgraph showing how they connect via edges. "
-        "Use seed IDs with Read(file, offset=line) to view code. "
-        "Use 'node' for detailed info about a specific node. "
-        "Use 'build' after code changes to update the graph."
+        "You are an expert software engineer with access to a high-fidelity "
+        "code graph. \n\n"
+        "GUIDELINES:\n"
+        "1. **Always search before grepping.** Use 'search' as your primary "
+        "discovery tool. It uses 5-signal HybridRAG which is far more "
+        "accurate than text-only search.\n"
+        "2. **Analyze impact before editing.** If you are about to modify a "
+        "function or class, use 'impact' to see what might break.\n"
+        "3. **Drill down.** Don't stop at the first search results. Use 'node' "
+        "to explore connections and 'dependencies' to understand the "
+        "sub-system.\n"
+        "4. **Stay current.** Run 'build' after you make significant code "
+        "changes to refresh your mental model."
     ),
 )
 
@@ -146,15 +153,14 @@ def search(
     how they connect. Use seed IDs with Read(file, offset=line) for details.
 
     Args:
-        query: What to search for (e.g. "authentication handler",
-               "database connection pool", "how does build work")
-        top_k: Number of results (default 30)
-        fast: Use text model only for faster response (default False)
+        query: What to search for. Be specific (e.g. "JWT token validation",
+               "database connection pool").
+        top_k: Number of results (default 30).
+        fast: Use text model only for lower latency (default False).
         kind: Filter by symbol kind. Valid: function, class, method,
               interface, enum, struct, trait, section.
-        file_pattern: Filter by file path glob (e.g. "src/auth/*")
-        include_tests: Give test files equal ranking weight (default False,
-              test files are demoted 0.3x).
+        file_pattern: Filter by file path glob (e.g. "src/auth/*").
+        include_tests: Give test files equal ranking weight (default False).
         snippets: Show source snippets for top results (default True).
     """
     store, G = _load()
@@ -173,6 +179,109 @@ def search(
     )
     source_dir = str(Path(_get_db_path()).parent.parent) + "/"
     return graph.to_text(source_dir=source_dir)
+
+
+@mcp.tool()
+def impact(node_id: str, max_depth: int = 3) -> str:
+    """Analyze the 'blast radius' of a change.
+
+    Returns a list of all symbols that transitively depend on the given
+    node (i.e. those that call or reference it). Use this BEFORE
+    modifying code to avoid breaking downstream consumers.
+
+    Args:
+        node_id: Full or partial node ID to analyze.
+        max_depth: How many levels of dependents to trace (default 3).
+    """
+    import networkx as nx
+    store, G = _load()
+
+    # Resolve node_id
+    if node_id not in G:
+        q = node_id.lower()
+        matches = [
+            n for n in G.nodes
+            if q in n.lower() or q in G.nodes[n].get("label", "").lower()
+        ]
+        if not matches:
+            return f"No node found matching '{node_id}'."
+        target = matches[0]
+    else:
+        target = node_id
+
+    # Find ancestors (those that depend on target)
+    # We use reverse graph and descendants to get limited depth ancestors
+    R = G.reverse(copy=False)
+
+    label = G.nodes[target].get('label', target)
+    lines = [f"## Impact Analysis (Blast Radius) for '{label}'\n"]
+
+    for d in range(1, max_depth + 1):
+        layer = nx.descendants_at_distance(R, target, d)
+        if not layer:
+            break
+        lines.append(f"### Level {d} Dependents")
+        for nid in sorted(layer):
+            data = G.nodes[nid]
+            kind = data.get('kind', 'unknown')
+            fpath = data.get('file_path', 'N/A')
+            lines.append(f"- {data.get('label', nid)} ({kind}) in {fpath}")
+        lines.append("")
+
+    if len(lines) == 1:
+        return f"No downstream dependents found for '{node_id}'."
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def dependencies(node_id: str, max_depth: int = 3) -> str:
+    """Analyze the dependencies of a symbol.
+
+    Returns a list of all symbols that the given node transitively
+    depends on (i.e. those it calls or references). Use this to
+    understand the context and requirements of a piece of code.
+
+    Args:
+        node_id: Full or partial node ID to analyze.
+        max_depth: How many levels of dependencies to trace (default 3).
+    """
+    import networkx as nx
+    store, G = _load()
+
+    # Resolve node_id
+    if node_id not in G:
+        q = node_id.lower()
+        matches = [
+            n for n in G.nodes
+            if q in n.lower() or q in G.nodes[n].get("label", "").lower()
+        ]
+        if not matches:
+            return f"No node found matching '{node_id}'."
+        target = matches[0]
+    else:
+        target = node_id
+
+    label = G.nodes[target].get('label', target)
+    lines = [f"## Dependency Analysis for '{label}'\n"]
+
+    for d in range(1, max_depth + 1):
+        layer = nx.descendants_at_distance(G, target, d)
+        if not layer:
+            break
+        lines.append(f"### Level {d} Dependencies")
+        for nid in sorted(layer):
+            data = G.nodes[nid]
+            kind = data.get('kind', 'unknown')
+            fpath = data.get('file_path', 'N/A')
+            lines.append(f"- {data.get('label', nid)} ({kind}) in {fpath}")
+        lines.append("")
+
+    if len(lines) == 1:
+        return f"No dependencies found for '{node_id}'."
+
+    return "\n".join(lines)
+
 
 
 @mcp.tool()

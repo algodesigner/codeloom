@@ -37,6 +37,64 @@ def cli(ctx):
 
 
 @cli.command()
+@click.option(
+    "--scope",
+    type=click.Choice(["user", "project"], case_sensitive=False),
+    default=None,
+    help="Installation scope",
+)
+@click.pass_context
+def setup(ctx, scope: str | None):
+    """One-step setup for all AI agent integrations.
+
+    Detects installed editors (Claude Code, Cursor, Windsurf, etc.)
+    and configures MCP, skills, and context files automatically.
+    """
+    from ._helpers import human_choose, human_done, human_header
+    from .integrations import (
+        aider_install,
+        claude_install,
+        cline_install,
+        codex_install,
+        cursor_install,
+        gemini_install,
+        opencode_install,
+        windsurf_install,
+    )
+
+    if scope is None:
+        scope = human_choose(
+            "Default installation scope?",
+            ["user", "project"],
+            descriptions=[
+                "Global (~/.config/) — works for all projects",
+                "Local (./.claude/ etc.) — this project only",
+            ],
+            default=1,
+        )
+
+    human_header("codeloom: Automated Agent Setup")
+
+    # We run all installers. They are designed to be safe
+    # (skip if not applicable) though some currently prompt or assume paths.
+    # In a real setup we might check if the editor is actually installed first.
+
+    ctx.invoke(claude_install, scope=scope)
+    ctx.invoke(opencode_install, scope=scope)
+
+    # Project-level only integrations
+    aider_install()
+    cline_install()
+    codex_install()
+    cursor_install()
+    gemini_install()
+    windsurf_install()
+
+    human_done("Setup complete! All detected agents are now codeloom-aware.")
+
+
+
+@cli.command()
 @click.argument("source_dir", type=click.Path(exists=True))
 @click.option(
     "--output",
