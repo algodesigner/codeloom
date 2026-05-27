@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 from pathlib import Path
 
 import click
@@ -61,7 +62,7 @@ def sync_codeloom_context(file_path: Path):
     frontmatter_pattern = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
     fm_match = frontmatter_pattern.match(content)
     fm_text = fm_match.group(0) if fm_match else ""
-    main_content = content[len(fm_text):]
+    main_content = content[len(fm_text) :]
 
     # Try to find the marked block in the whole file
     block_pattern = re.compile(
@@ -82,7 +83,6 @@ def sync_codeloom_context(file_path: Path):
                 return
             else:
                 # Move to correct position
-                # Remove block from wherever it is and insert after FM
                 clean_main = block_pattern.sub("", main_content).lstrip()
                 new_file_content = fm_text + new_context + clean_main
                 file_path.write_text(new_file_content)
@@ -98,8 +98,8 @@ def sync_codeloom_context(file_path: Path):
         # No marked block found. Check for legacy unmarked header.
         legacy_marker = "## codeloom"
         if legacy_marker in content:
-            # Safety fallback: Prepend marked block after FM and
-            # leave legacy alone
+            # Safety fallback: Prepend marked block after FM and leave
+            # legacy alone
             new_file_content = fm_text + new_context + main_content
             file_path.write_text(new_file_content)
             human_warn(
@@ -111,6 +111,56 @@ def sync_codeloom_context(file_path: Path):
             new_file_content = fm_text + new_context + main_content.lstrip()
             file_path.write_text(new_file_content)
             human_ok(f"Prepended codeloom rules to {file_path.name}.")
+
+
+def uninstall_codeloom_context(file_path: Path):
+    """Removes the marked codeloom block from a file."""
+    import re
+
+    if not file_path.exists():
+        human_skip(f"{file_path.name} not found")
+        return
+
+    content = file_path.read_text()
+    start_marker = "<!-- codeloom-start -->"
+    end_marker = "<!-- codeloom-end -->"
+
+    pattern = re.compile(
+        f"{re.escape(start_marker)}.*?{re.escape(end_marker)}\\s*",
+        re.DOTALL,
+    )
+
+    if pattern.search(content):
+        new_content = pattern.sub("", content).strip()
+        if new_content:
+            file_path.write_text(new_content + "\n")
+        else:
+            file_path.unlink()
+        human_ok(f"Removed codeloom context from {file_path.name}")
+    else:
+        # Fallback for legacy unmarked header
+        lines = content.splitlines(keepends=True)
+        filtered = []
+        skip = False
+        for line in lines:
+            if line.strip() == "## codeloom":
+                skip = True
+                continue
+            if (
+                skip
+                and line.startswith("##")
+                and "codeloom" not in line.lower()
+            ):
+                skip = False
+            if not skip:
+                filtered.append(line)
+
+        new_content = "".join(filtered).strip()
+        if new_content:
+            file_path.write_text(new_content + "\n")
+        else:
+            file_path.unlink()
+        human_ok(f"Removed legacy codeloom section from {file_path.name}")
 
 
 def sync_skill_file(source: Path, dest: Path, force: bool = False):
@@ -146,8 +196,6 @@ def sync_skill_file(source: Path, dest: Path, force: bool = False):
         shutil.copy2(source, dest)
         human_ok(f"Force-updated skill in {dest.parent}/")
     else:
-        # Check if destination is a "known" previous version
-        # (For now, we just warn if it's different and not identical)
         human_warn(
             f"Skill in {dest.parent}/ has manual edits. "
             "Use --force to overwrite."
@@ -188,9 +236,6 @@ def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
         hooks = curr.setdefault("hooks", {})
         for event, entry_list in new_data.items():
             existing_event_hooks = hooks.setdefault(event, [])
-            # Check if an entry with "codeloom" already exists for this event
-            import json as _json
-
             already = any(
                 "codeloom" in _json.dumps(h) for h in existing_event_hooks
             )
@@ -198,7 +243,6 @@ def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
                 existing_event_hooks.extend(entry_list)
                 human_ok(f"Added codeloom {event} hook to {file_path.name}.")
             else:
-                # Update the existing hook in place (optional, for now skip)
                 msg = f"codeloom {event} hook already in {file_path.name}."
                 human_skip(msg)
     else:
@@ -213,7 +257,7 @@ def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
             curr[target_key] = new_data
         human_ok(f"Updated {target_key} in {file_path.name}.")
 
-    file_path.write_text(json.dumps(data, indent=2) + "\n")
+    file_path.write_text(_json.dumps(data, indent=2) + "\n")
 
 
 # ─── Claude Code ─────────────────────────────────────────────────────────────
@@ -230,20 +274,13 @@ def claude_group():
     "--scope",
     type=click.Choice(["user", "project"], case_sensitive=False),
     default=None,
-    help="Install scope: 'user' (global ~/.claude/skills/) or "
-    "'project' (.claude/skills/). "
-    "If omitted, you will be prompted to choose.",
+    help="Install scope: 'user' (global) or 'project' (local).",
 )
 @click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 def claude_install(scope: str | None, force: bool = False):
-    """Install Claude Code integration.
-
-    Priority: 1) Skill  2) CLAUDE.md + hooks  3) MCP
-    """
-
+    """Install Claude Code integration."""
     project_root = Path.cwd()
 
-    # --- Prompt for scope if not specified ---
     if scope is None:
         scope = human_choose(
             "Where should codeloom be installed?",
@@ -257,7 +294,6 @@ def claude_install(scope: str | None, force: bool = False):
 
     human_header(f"Installing codeloom for Claude Code (scope: {scope})")
 
-    # --- Priority 1: Install Skill ---
     skill_source = Path(__file__).parent.parent / "skill.md"
     if scope == "user":
         skill_dir = Path.home() / ".claude" / "skills" / "codeloom"
@@ -267,12 +303,9 @@ def claude_install(scope: str | None, force: bool = False):
     skill_dest = skill_dir / "SKILL.md"
     sync_skill_file(skill_source, skill_dest, force=force)
 
-    # --- Priority 2: CLAUDE.md + hooks ---
-    # 1. Write section to project CLAUDE.md
     claude_md = project_root / "CLAUDE.md"
     sync_codeloom_context(claude_md)
 
-    # 2. Write hooks to .claude/settings.json
     settings_dir = project_root / ".claude"
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file = settings_dir / "settings.json"
@@ -326,62 +359,11 @@ def claude_install(scope: str | None, force: bool = False):
                     }
                 ],
             }
-        ]
+        ],
     }
 
     merge_json_config(settings_file, new_hooks, ["hooks"])
-
     human_done("Done! Run 'codeloom build .' to create your first code graph.")
-
-
-def uninstall_codeloom_context(file_path: Path):
-    """Removes the marked codeloom block from a file."""
-    import re
-
-    if not file_path.exists():
-        human_skip(f"{file_path.name} not found")
-        return
-
-    content = file_path.read_text()
-    start_marker = "<!-- codeloom-start -->"
-    end_marker = "<!-- codeloom-end -->"
-
-    pattern = re.compile(
-        f"{re.escape(start_marker)}.*?{re.escape(end_marker)}\\s*",
-        re.DOTALL,
-    )
-
-    if pattern.search(content):
-        new_content = pattern.sub("", content).strip()
-        if new_content:
-            file_path.write_text(new_content + "\n")
-        else:
-            file_path.unlink()
-        human_ok(f"Removed codeloom context from {file_path.name}")
-    else:
-        # Fallback for legacy unmarked header
-        lines = content.splitlines(keepends=True)
-        filtered = []
-        skip = False
-        for line in lines:
-            if line.strip() == "## codeloom":
-                skip = True
-                continue
-            if (
-                skip
-                and line.startswith("##")
-                and "codeloom" not in line.lower()
-            ):
-                skip = False
-            if not skip:
-                filtered.append(line)
-
-        new_content = "".join(filtered).strip()
-        if new_content:
-            file_path.write_text(new_content + "\n")
-        else:
-            file_path.unlink()
-        human_ok(f"Removed legacy codeloom section from {file_path.name}")
 
 
 @claude_group.command(name="uninstall")
@@ -392,14 +374,12 @@ def uninstall_codeloom_context(file_path: Path):
     help="Uninstall scope: 'user', 'project', or 'all' (default).",
 )
 def claude_uninstall(scope: str):
-    """Remove Claude Code integration (skill + CLAUDE.md + hooks)."""
-    import json
+    """Remove Claude Code integration."""
     import shutil
 
     human_header("Removing codeloom from Claude Code")
     project_root = Path.cwd()
 
-    # 0. Remove skill
     if scope in ("user", "all"):
         user_skill = Path.home() / ".claude" / "skills" / "codeloom"
         if user_skill.exists():
@@ -411,31 +391,28 @@ def claude_uninstall(scope: str):
             shutil.rmtree(proj_skill)
             human_ok("Project skill removed")
 
-    # 1. Remove section from CLAUDE.md
     claude_md = project_root / "CLAUDE.md"
     uninstall_codeloom_context(claude_md)
 
-    # 2. Remove hooks from .claude/settings.json
-
     settings_file = project_root / ".claude" / "settings.json"
     if settings_file.exists():
-        settings = json.loads(settings_file.read_text())
+        settings = _json.loads(settings_file.read_text())
         hooks = settings.get("hooks", {})
-        for event in ("PreToolUse", "Stop"):
+        for event in ("PreToolUse", "PostToolUse", "Stop"):
             event_hooks = hooks.get(event, [])
             hooks[event] = [
                 h
                 for h in event_hooks
                 if (
-                    "codeloom" not in json.dumps(h)
-                    and "auto_rebuild" not in json.dumps(h)
+                    "codeloom" not in _json.dumps(h)
+                    and "auto_rebuild" not in _json.dumps(h)
                 )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
         if not hooks:
             settings.pop("hooks", None)
-        settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+        settings_file.write_text(_json.dumps(settings, indent=2) + "\n")
         human_ok("Hooks removed from .claude/settings.json")
 
     human_done("codeloom integration removed.")
@@ -456,11 +433,9 @@ def codex_install():
     human_header("Installing codeloom for Codex CLI...")
     project_root = Path.cwd()
 
-    # 1. Write section to project AGENTS.md
     agents_md = project_root / "AGENTS.md"
     sync_codeloom_context(agents_md)
 
-    # 2. Write PreToolUse hook to .codex/hooks.json
     hooks_dir = project_root / ".codex"
     hooks_dir.mkdir(parents=True, exist_ok=True)
     hooks_file = hooks_dir / "hooks.json"
@@ -498,30 +473,25 @@ def codex_install():
                     }
                 ],
             }
-        ]
+        ],
     }
 
     merge_json_config(hooks_file, new_hooks, ["hooks"])
-
     human_done()
 
 
 @codex_group.command(name="uninstall")
 def codex_uninstall():
     """Remove per-project Codex CLI integration."""
-    import json
     human_header("Removing codeloom from Codex CLI")
     project_root = Path.cwd()
 
-    # 1. Remove section from AGENTS.md
     agents_md = project_root / "AGENTS.md"
     uninstall_codeloom_context(agents_md)
 
-    # 2. Remove hooks from .codex/hooks.json
-
     hooks_file = project_root / ".codex" / "hooks.json"
     if hooks_file.exists():
-        hooks_data = json.loads(hooks_file.read_text())
+        hooks_data = _json.loads(hooks_file.read_text())
         hooks = hooks_data.get("hooks", {})
         for event in ("PreToolUse", "Stop"):
             event_hooks = hooks.get(event, [])
@@ -529,15 +499,15 @@ def codex_uninstall():
                 h
                 for h in event_hooks
                 if (
-                    "codeloom" not in json.dumps(h)
-                    and "auto_rebuild" not in json.dumps(h)
+                    "codeloom" not in _json.dumps(h)
+                    and "auto_rebuild" not in _json.dumps(h)
                 )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
         if not hooks:
             hooks_data.pop("hooks", None)
-        hooks_file.write_text(json.dumps(hooks_data, indent=2) + "\n")
+        hooks_file.write_text(_json.dumps(hooks_data, indent=2) + "\n")
         human_ok("Hooks removed from .codex/hooks.json")
 
     human_done("codeloom integration removed.")
@@ -554,16 +524,13 @@ def gemini_group():
 
 @gemini_group.command(name="install")
 def gemini_install():
-    """Install per-project Gemini CLI integration (GEMINI.md + BeforeTool
-    hook)."""
+    """Install per-project Gemini CLI integration (GEMINI.md + hooks)."""
     human_header("Installing codeloom for Gemini CLI...")
     project_root = Path.cwd()
 
-    # 1. Write section to project GEMINI.md
     gemini_md = project_root / "GEMINI.md"
     sync_codeloom_context(gemini_md)
 
-    # 2. Write BeforeTool hook to .gemini/settings.json
     settings_dir = project_root / ".gemini"
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file = settings_dir / "settings.json"
@@ -600,30 +567,25 @@ def gemini_install():
                     }
                 ],
             }
-        ]
+        ],
     }
 
     merge_json_config(settings_file, new_hooks, ["hooks"])
-
     human_done()
 
 
 @gemini_group.command(name="uninstall")
 def gemini_uninstall():
     """Remove per-project Gemini CLI integration."""
-    import json
     human_header("Removing codeloom from Gemini CLI")
     project_root = Path.cwd()
 
-    # 1. Remove section from GEMINI.md
     gemini_md = project_root / "GEMINI.md"
     uninstall_codeloom_context(gemini_md)
 
-    # 2. Remove hooks from .gemini/settings.json
-
     settings_file = project_root / ".gemini" / "settings.json"
     if settings_file.exists():
-        settings = json.loads(settings_file.read_text())
+        settings = _json.loads(settings_file.read_text())
         hooks = settings.get("hooks", {})
         for event in ("BeforeTool", "SessionEnd"):
             event_hooks = hooks.get(event, [])
@@ -631,15 +593,15 @@ def gemini_uninstall():
                 h
                 for h in event_hooks
                 if (
-                    "codeloom" not in json.dumps(h)
-                    and "auto_rebuild" not in json.dumps(h)
+                    "codeloom" not in _json.dumps(h)
+                    and "auto_rebuild" not in _json.dumps(h)
                 )
             ]
             if not hooks[event]:
                 hooks.pop(event, None)
         if not hooks:
             settings.pop("hooks", None)
-        settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+        settings_file.write_text(_json.dumps(settings, indent=2) + "\n")
         human_ok("Hooks removed from .gemini/settings.json")
 
     human_done("codeloom integration removed.")
@@ -717,7 +679,6 @@ def windsurf_install():
     rules_file = rules_dir / "codeloom.md"
 
     sync_codeloom_context(rules_file)
-
     human_done()
 
 
@@ -729,7 +690,6 @@ def windsurf_uninstall():
 
     rules_file = project_root / ".windsurf" / "rules" / "codeloom.md"
     uninstall_codeloom_context(rules_file)
-
     human_done("codeloom integration removed.")
 
 
@@ -749,9 +709,7 @@ def cline_install():
     project_root = Path.cwd()
 
     rules_file = project_root / ".clinerules"
-
     sync_codeloom_context(rules_file)
-
     human_done()
 
 
@@ -763,10 +721,10 @@ def cline_uninstall():
 
     rules_file = project_root / ".clinerules"
     uninstall_codeloom_context(rules_file)
-
     human_done("codeloom integration removed.")
 
-    human_done("codeloom integration removed.")
+
+# ─── Aider CLI ───────────────────────────────────────────────────────────────
 
 
 @click.group(name="aider")
@@ -784,11 +742,9 @@ def aider_install():
     human_header("Installing codeloom for Aider CLI...")
     project_root = Path.cwd()
 
-    # 1. Write CONVENTIONS.md with codeloom rules
     conventions_md = project_root / "CONVENTIONS.md"
     sync_codeloom_context(conventions_md)
 
-    # 2. Ensure .aider.conf.yml loads CONVENTIONS.md via read:
     conf_file = project_root / ".aider.conf.yml"
     if conf_file.exists():
         conf = yaml.safe_load(conf_file.read_text()) or {}
@@ -817,11 +773,8 @@ def aider_uninstall():
     human_header("Removing codeloom from Aider CLI")
     project_root = Path.cwd()
 
-    # 1. Remove section from CONVENTIONS.md
     conventions_md = project_root / "CONVENTIONS.md"
     uninstall_codeloom_context(conventions_md)
-
-    # 2. Remove CONVENTIONS.md from .aider.conf.yml read list
 
     conf_file = project_root / ".aider.conf.yml"
     if conf_file.exists():
@@ -858,18 +811,11 @@ def opencode_group():
     "--scope",
     type=click.Choice(["user", "project"], case_sensitive=False),
     default=None,
-    help="Install scope: 'user' (global ~/.config/opencode/skills/) "
-    "or 'project' (.opencode/skills/). "
-    "If omitted, you will be prompted to choose.",
+    help="Install scope: 'user' (global) or 'project' (local).",
 )
 @click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 def opencode_install(scope: str | None, force: bool = False):
-    """Install the codeloom skill for OpenCode.
-
-    Writes the skill file to .opencode/skills/codeloom/SKILL.md or
-    ~/.config/opencode/skills/codeloom/SKILL.md depending on scope.
-    OpenCode discovers skills automatically from the skills directory.
-    """
+    """Install the codeloom skill for OpenCode."""
     project_root = Path.cwd()
 
     if scope is None:
@@ -895,7 +841,6 @@ def opencode_install(scope: str | None, force: bool = False):
     skill_dest = skill_dir / "SKILL.md"
     sync_skill_file(skill_source, skill_dest, force=force)
 
-    # Auto-register MCP config for OpenCode
     if scope == "user":
         mcp_config_path = Path.home() / ".config" / "opencode" / "config.json"
     else:
@@ -909,7 +854,6 @@ def opencode_install(scope: str | None, force: bool = False):
     }
 
     merge_json_config(mcp_config_path, mcp_codeloom_config, ["mcp"])
-
     human_done(
         "Done! OpenCode will discover the skill and MCP tools automatically."
     )
@@ -940,13 +884,53 @@ def opencode_uninstall(scope: str):
     else:
         human_skip(f"{skill_dir}/ not found")
 
-    # Clean up empty parent directories
     parent = skill_dir.parent
     if parent.exists() and not any(parent.iterdir()):
         parent.rmdir()
         human_ok(f"Removed empty {parent}/ directory")
 
     human_done("codeloom integration removed.")
+
+
+# ─── Detection Logic ──────────────────────────────────────────────────────────
+
+
+def detect_agents() -> list[str]:
+    """Detect which agents are present on the machine or in the project."""
+    import shutil
+
+    detected = []
+    project_root = Path.cwd()
+
+    # Heuristics - mostly restricted to project root to avoid false positives
+    # in test environments (which share the real home directory).
+    heuristics = {
+        "claude": lambda: shutil.which("claude")
+        or (project_root / ".claude").exists()
+        or (project_root / "CLAUDE.md").exists(),
+        "opencode": lambda: shutil.which("opencode")
+        or (project_root / "opencode.json").exists()
+        or (project_root / ".opencode").exists(),
+        "aider": lambda: shutil.which("aider")
+        or (project_root / ".aider.conf.yml").exists()
+        or (project_root / "CONVENTIONS.md").exists(),
+        "cursor": lambda: (project_root / ".cursor").exists(),
+        "windsurf": lambda: (project_root / ".windsurf").exists(),
+        "cline": lambda: (project_root / ".clinerules").exists(),
+        "codex": lambda: (project_root / ".codex").exists()
+        or (project_root / "AGENTS.md").exists(),
+        "gemini": lambda: (project_root / ".gemini").exists()
+        or (project_root / "GEMINI.md").exists(),
+    }
+
+    for agent, check in heuristics.items():
+        try:
+            if check():
+                detected.append(agent)
+        except Exception:
+            pass
+
+    return detected
 
 
 # ─── Register all groups ─────────────────────────────────────────────────────

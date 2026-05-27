@@ -37,6 +37,7 @@ def cli(ctx):
 
 
 @cli.command()
+@click.argument("platform", required=False)
 @click.option(
     "--scope",
     type=click.Choice(["user", "project"], case_sensitive=False),
@@ -45,53 +46,151 @@ def cli(ctx):
 )
 @click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 @click.pass_context
-def setup(ctx, scope: str | None, force: bool):
-    """One-step setup for all AI agent integrations.
+def setup(ctx, platform: str | None, scope: str | None, force: bool):
+    """Unified setup for AI agent integrations.
 
-    Detects installed editors (Claude Code, Cursor, Windsurf, etc.)
-    and configures MCP, skills, and context files automatically.
+    With no arguments, it intelligently detects present agents and
+    configures them. Use 'codeloom setup <platform>' to pinpoint a specific
+    agent (e.g., claude, cursor, aider).
     """
-    from ._helpers import human_choose, human_done, human_header
+    from ._helpers import (
+        human_choose,
+        human_done,
+        human_fail,
+        human_header,
+        human_ok,
+    )
     from .integrations import (
         aider_install,
         claude_install,
         cline_install,
         codex_install,
         cursor_install,
+        detect_agents,
         gemini_install,
         opencode_install,
         windsurf_install,
     )
 
-    if scope is None:
-        scope = human_choose(
-            "Default installation scope?",
-            ["user", "project"],
-            descriptions=[
-                "Global (~/.config/) — works for all projects",
-                "Local (./.claude/ etc.) — this project only",
-            ],
-            default=1,
-        )
+    agent_registry = {
+        "claude": claude_install,
+        "opencode": opencode_install,
+        "aider": aider_install,
+        "cursor": cursor_install,
+        "windsurf": windsurf_install,
+        "cline": cline_install,
+        "codex": codex_install,
+        "gemini": gemini_install,
+    }
+
+    if platform:
+        if platform.lower() not in agent_registry:
+            valid = ", ".join(agent_registry.keys())
+            human_fail(f"Unknown agent: {platform}. Valid: {valid}")
+            return
+        to_install = [platform.lower()]
+    else:
+        # Intelligent detection
+        human_header("Scanning for AI agents...")
+        detected = detect_agents()
+        if detected:
+            msg = f"Detected agents: {', '.join(detected)}"
+            human_ok(msg)
+            confirm_msg = "Proceed with setup for these agents?"
+            if click.confirm(confirm_msg, default=True):
+                to_install = detected
+            else:
+                return
+        else:
+            human_warn("No agents detected automatically.")
+            to_install = human_choose(
+                "Pick agents to configure manually:",
+                list(agent_registry.keys()),
+                multiple=True,
+            )
+
+    if not to_install:
+        human_done("Nothing to install.")
+        return
 
     human_header("codeloom: Automated Agent Setup")
 
-    # We run all installers. They are designed to be safe
-    # (skip if not applicable) though some currently prompt or assume paths.
-    # In a real setup we might check if the editor is actually installed first.
+    for agent in to_install:
+        installer = agent_registry[agent]
+        # Use ctx.invoke to prevent sys.argv parsing issues
+        if agent in ("claude", "opencode"):
+            ctx.invoke(installer, scope=scope, force=force)
+        else:
+            ctx.invoke(installer)
 
-    ctx.invoke(claude_install, scope=scope, force=force)
-    ctx.invoke(opencode_install, scope=scope, force=force)
+    human_done("Setup complete! Agents are now codeloom-aware.")
 
-    # Project-level only integrations
-    ctx.invoke(aider_install)
-    ctx.invoke(cline_install)
-    ctx.invoke(codex_install)
-    ctx.invoke(cursor_install)
-    ctx.invoke(gemini_install)
-    ctx.invoke(windsurf_install)
 
-    human_done("Setup complete! All detected agents are now codeloom-aware.")
+@cli.command()
+@click.argument("platform", required=False)
+@click.pass_context
+def uninstall(ctx, platform: str | None):
+    """Unified removal of AI agent integrations.
+
+    With no arguments, it scans for codeloom footprints and removes
+    them. Use 'codeloom uninstall <platform>' to remove a specific agent.
+    """
+    from ._helpers import human_done, human_fail, human_header, human_ok
+    from .integrations import (
+        aider_uninstall,
+        claude_uninstall,
+        cline_uninstall,
+        codex_uninstall,
+        cursor_uninstall,
+        detect_agents,
+        gemini_uninstall,
+        opencode_uninstall,
+        windsurf_uninstall,
+    )
+
+    agent_registry = {
+        "claude": claude_uninstall,
+        "opencode": opencode_uninstall,
+        "aider": aider_uninstall,
+        "cursor": cursor_uninstall,
+        "windsurf": windsurf_uninstall,
+        "cline": cline_uninstall,
+        "codex": codex_uninstall,
+        "gemini": gemini_uninstall,
+    }
+
+    if platform:
+        if platform.lower() not in agent_registry:
+            human_fail(f"Unknown agent: {platform}")
+            return
+        to_remove = [platform.lower()]
+    else:
+        # Footprint scan (reuse detection heuristics)
+        human_header("Scanning for codeloom footprints...")
+        detected = detect_agents()
+        if detected:
+            msg = f"Found codeloom in: {', '.join(detected)}"
+            human_ok(msg)
+            if click.confirm("Remove these integrations?", default=True):
+                to_remove = detected
+            else:
+                return
+        else:
+            human_done("No codeloom integrations found.")
+            return
+
+    human_header("codeloom: Automated Agent Removal")
+
+    for agent in to_remove:
+        uninstaller = agent_registry[agent]
+        if agent in ("claude", "opencode"):
+            # Uninstall scope default is usually 'all' or 'project'
+            scope = "all" if agent == "claude" else "project"
+            ctx.invoke(uninstaller, scope=scope)
+        else:
+            ctx.invoke(uninstaller)
+
+    human_done("Removal complete! codeloom integrations cleaned up.")
 
 
 

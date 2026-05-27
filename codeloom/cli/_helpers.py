@@ -104,12 +104,41 @@ def human_choose(
     choices: list[str],
     descriptions: list[str] | None = None,
     default: int = 1,
-) -> str:
-    """Show an interactive arrow-key menu and return the chosen value.
+    multiple: bool = False,
+) -> str | list[str]:
+    """Show an interactive menu and return the chosen value(s).
 
     Falls back to numbered input if terminal doesn't support raw mode.
     """
     import sys
+
+    if multiple:
+        # For multiple selection, we always use numbered fallback
+        msg = f"{prompt}  {_DIM}(Enter numbers separated by comma){_RESET}\n"
+        click.echo(msg)
+        for i, choice in enumerate(choices, 1):
+            desc = (
+                f"  {_DIM}{descriptions[i - 1]}{_RESET}" if descriptions else ""
+            )
+            click.echo(f"   {i}) {choice}{desc}")
+        click.echo()
+
+        while True:
+            raw = click.prompt("Selection", default=str(default))
+            try:
+                indices = [int(x.strip()) for x in raw.split(",")]
+                return [
+                    choices[i - 1] for i in indices if 1 <= i <= len(choices)
+                ]
+            except (ValueError, IndexError):
+                # Check for direct name matches
+                names = [x.strip().lower() for x in raw.split(",")]
+                selected = [c for c in choices if c.lower() in names]
+                if selected:
+                    return selected
+                msg = "Invalid selection. Use numbers (e.g. 1,2) or names."
+                click.echo(msg)
+                continue
 
     selected = default - 1  # 0-based
 
