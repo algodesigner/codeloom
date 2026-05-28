@@ -23,9 +23,8 @@ env/
 .DS_Store
 Thumbs.db
 
-# hedwig-cg databases (generated)
-.hedwig-cg/
-.hedwig-cb/
+# codeloom databases (generated)
+.codeloom/
 
 # Claude Code
 .claude/
@@ -41,7 +40,7 @@ htmlcov/
 # Internal review feedback (not for public repo)
 feedbacks/
 
-# Generated integration files (from hedwig-cg install commands)
+# Generated integration files (from codeloom install commands)
 .cursor/
 .windsurf/
 .codex/
