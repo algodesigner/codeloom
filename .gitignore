@@ -41,6 +41,7 @@ htmlcov/
 feedbacks/
 
 # Generated integration files (from codeloom install commands)
+.opencode/
 .cursor/
 .windsurf/
 .codex/
@@ -48,6 +49,7 @@ AGENTS.md
 GEMINI.md
 CONVENTIONS.md
 .aider.conf.yml
+opencode.json
 
 # OMC state
 .omc/
