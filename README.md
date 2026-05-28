@@ -48,17 +48,17 @@ codeloom integrates with major AI coding agents in one command:
 
 | Agent | Install | What it does |
 |-------|---------|-------------|
-| **Claude Code** | `codeloom claude install` | Skill + CLAUDE.md + PreToolUse hook |
-| **OpenCode** | `codeloom opencode install` | Skill in `.opencode/skills/` |
-| **Codex CLI** | `codeloom codex install` | AGENTS.md + PreToolUse hook |
-| **Gemini CLI** | `codeloom gemini install` | GEMINI.md + BeforeTool hook |
+| **Claude Code** | `codeloom claude install` | Skill + CLAUDE.md + PreToolUse/PostToolUse/Stop hooks |
+| **OpenCode** | `codeloom opencode install` | Skill + plugin (auto-injects graph context before grep/glob) + MCP tools |
+| **Codex CLI** | `codeloom codex install` | AGENTS.md + PreToolUse/Stop hooks |
+| **Gemini CLI** | `codeloom gemini install` | GEMINI.md + BeforeTool/SessionEnd hooks |
 | **Cursor IDE** | `codeloom cursor install` | `.cursor/rules/` rule file |
 | **Windsurf IDE** | `codeloom windsurf install` | `.windsurf/rules/` rule file |
 | **Cline** | `codeloom cline install` | `.clinerules` file |
 | **Aider CLI** | `codeloom aider install` | CONVENTIONS.md + `.aider.conf.yml` |
-| **MCP Server** | `claude mcp add codeloom -- codeloom mcp` | 5 tools over Model Context Protocol |
+| **MCP Server** | `claude mcp add codeloom -- codeloom mcp` | 15 tools over Model Context Protocol |
 
-Each `install` does two things: writes a context file with rules, and (where supported) registers a hook that fires before tool calls. To remove: `codeloom <platform> uninstall`.
+Each `install` writes a context file with rules, registers hooks where supported, and for OpenCode also installs a plugin that automatically injects graph context into the agent's session before grep/glob calls. To remove: `codeloom <platform> uninstall`.
 
 ## Supported Languages
 
@@ -166,6 +166,14 @@ All commands output compact text by default (designed for AI agent consumption).
 | `search <query>` | Hybrid vector + keyword search with subgraph and snippets (`--top-k`, `--fast`, `--kind`, `--file`, `--include-tests`, `--snippets`) |
 | `search-vector <query>` | Vector similarity only (code + text dual model) |
 | `search-keyword <query>` | FTS5 keyword matching only (BM25 ranking) |
+| `context <id>` | 360-degree symbol view — all refs, community, edges, source snippet |
+| `impact <id>` | Blast radius — find all downstream dependents (`--max-depth`) |
+| `dependencies <id>` | Upstream dependency analysis (`--max-depth`) |
+| `detect-changes` | Map unstaged git changes to affected graph nodes |
+| `rename <old> <new>` | Find all locations and references for safe multi-file rename |
+| `explain-flow <id>` | Trace execution path through call chains |
+| `export-subgraph <id>` | Export focused subgraph around a symbol as D3.js JSON |
+| `list-repos` | List available code graphs with staleness status |
 | `query` | Interactive search REPL |
 | `communities` | List and search communities (`--search`, `--level`) |
 | `stats` | Graph statistics |

@@ -1,8 +1,8 @@
 """Tests for the MCP server tools.
 
-Verifies that all 5 MCP tools (search, node, stats, communities, build)
-return well-formatted output and handle edge cases gracefully.
-Uses mocked store/graph to avoid requiring a real database.
+Verifies that all 15 MCP tools return well-formatted output and
+handle edge cases gracefully. Uses mocked store/graph to avoid
+requiring a real database.
 """
 
 from __future__ import annotations
@@ -452,6 +452,8 @@ class TestBuildTool:
         src = tmp_path / "proj"
         src.mkdir()
         (src / "hello.py").write_text("def hello(): pass\n")
+        (src / ".codeloom").mkdir()
+        (src / ".codeloom" / "knowledge.db").touch()
 
         mock_graph = _make_graph()
         mock_result = SimpleNamespace(
@@ -463,10 +465,357 @@ class TestBuildTool:
                 "codeloom.core.pipeline.run_pipeline", return_value=mock_result
             ) as mock_pipe,
             patch("codeloom.mcp_server._reload"),
+            patch(
+                "codeloom.mcp_server._get_db_path",
+                return_value=str(src / ".codeloom" / "knowledge.db"),
+            ),
         ):
             build(str(src), incremental=False)
             _, kwargs = mock_pipe.call_args
             assert kwargs.get("incremental") is False
+
+
+# ---------------------------------------------------------------------------
+# Tests: search_keyword tool
+# ---------------------------------------------------------------------------
+
+
+class TestSearchKeywordTool:
+    def test_search_keyword_returns_results(self, mock_load):
+        from codeloom.mcp_server import search_keyword
+
+        store, _ = mock_load
+        store.keyword_search.return_value = [
+            {
+                "node_id": "auth.py:1",
+                "label": "AuthHandler",
+                "kind": "class",
+                "file_path": "auth.py",
+                "bm25_score": 0.8,
+            },
+        ]
+        result = search_keyword("AuthHandler")
+        assert "AuthHandler" in result
+        assert "auth.py" in result
+        assert "0.80" in result
+        store.keyword_search.assert_called_once()
+
+    def test_search_keyword_no_terms(self, mock_load):
+        from codeloom.mcp_server import search_keyword
+
+        result = search_keyword("")
+        assert "No search terms" in result
+
+    def test_search_keyword_no_results(self, mock_load):
+        from codeloom.mcp_server import search_keyword
+
+        store, _ = mock_load
+        store.keyword_search.return_value = []
+        result = search_keyword("NONEXISTENT_12345")
+        assert "No keyword matches" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: search_vector tool
+# ---------------------------------------------------------------------------
+
+
+class TestSearchVectorTool:
+    def test_search_vector_returns_results(self, mock_load):
+        from codeloom.mcp_server import search_vector
+
+        store, G = mock_load
+        fake_vectors = {"code": "fake_code_vec", "text": "fake_text_vec"}
+        store.vector_search.side_effect = lambda vec, **kw: (
+            [("auth.py:1", 0.85)] if "code" in str(type(vec)) else []
+        )
+        with patch(
+            "codeloom.query.embeddings.embed_query_dual",
+            return_value=fake_vectors,
+        ):
+            result = search_vector("authentication")
+        assert "auth.py:1" in result or "auth" in result.lower()
+
+    def test_search_vector_fast_mode_no_code(self, mock_load):
+        from codeloom.mcp_server import search_vector
+
+        store, _ = mock_load
+        fake_vectors = {"text": "fake_text_vec"}
+        store.vector_search.return_value = [("server.py:10", 0.72)]
+        with patch(
+            "codeloom.query.embeddings.embed_query_dual",
+            return_value=fake_vectors,
+        ):
+            result = search_vector("request handler", fast=True)
+        assert "server.py:10" in result or "request" in result.lower()
+
+    def test_search_vector_no_results(self, mock_load):
+        from codeloom.mcp_server import search_vector
+
+        store, _ = mock_load
+        fake_vectors = {"code": "vec", "text": "vec"}
+        store.vector_search.return_value = []
+        with patch(
+            "codeloom.query.embeddings.embed_query_dual",
+            return_value=fake_vectors,
+        ):
+            result = search_vector("xyznonexistent_12345")
+        assert "No vector matches" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: context tool
+# ---------------------------------------------------------------------------
+
+
+class TestContextTool:
+    def test_context_exact_match(self, mock_load):
+        from codeloom.mcp_server import context
+
+        store, G = mock_load
+        # Mock community query
+        store.conn.execute.return_value.fetchone.return_value = {
+            "summary": "Authentication module",
+        }
+        result = context("auth.py:1")
+        assert "AuthHandler" in result
+        assert "class" in result
+        assert "auth.py" in result
+        assert "Handles user authentication" in result
+        assert "Community 0" in result
+        assert "Outgoing" in result or "Incoming" in result
+
+    def test_context_partial_match(self, mock_load):
+        from codeloom.mcp_server import context
+
+        store, G = mock_load
+        store.conn.execute.return_value.fetchone.return_value = {
+            "summary": "Auth module",
+        }
+        result = context("AuthHandler")
+        assert "AuthHandler" in result
+
+    def test_context_not_found(self, mock_load):
+        from codeloom.mcp_server import context
+
+        result = context("NonExistentSymbol_XYZ")
+        assert "No node found" in result
+
+    def test_context_shows_pagerank(self, mock_load):
+        from codeloom.mcp_server import context
+
+        store, G = mock_load
+        store.conn.execute.return_value.fetchone.return_value = {
+            "summary": "Auth module",
+        }
+        result = context("auth.py:1")
+        assert "PageRank" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: list_repos tool
+# ---------------------------------------------------------------------------
+
+
+class TestListReposTool:
+    def test_list_repos_shows_graph_info(self, mock_load, tmp_path):
+        from codeloom.mcp_server import list_repos
+
+        fake_db = tmp_path / ".codeloom" / "knowledge.db"
+        fake_db.parent.mkdir(parents=True)
+        fake_db.touch()
+        with (
+            patch("codeloom.mcp_server._run_git", return_value=""),
+            patch(
+                "codeloom.mcp_server._get_db_path",
+                return_value=str(fake_db),
+            ),
+        ):
+            result = list_repos()
+        assert "Code Graph" in result
+        assert "3" in result  # 3 nodes
+        assert "2" in result  # 2 edges
+
+    def test_list_repos_no_db(self, mock_load):
+        from codeloom.mcp_server import list_repos
+
+        with patch(
+            "codeloom.mcp_server._get_db_path",
+            return_value="/nonexistent/.codeloom/knowledge.db",
+        ):
+            result = list_repos()
+        assert "No code graph found" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: detect_changes tool
+# ---------------------------------------------------------------------------
+
+
+class TestDetectChangesTool:
+    def test_detect_changes_no_changes(self, mock_load):
+        from codeloom.mcp_server import detect_changes
+
+        with (
+            patch("codeloom.mcp_server._run_git", return_value=""),
+            patch(
+                "codeloom.mcp_server._get_db_path",
+                return_value="/fake/.codeloom/knowledge.db",
+            ),
+        ):
+            result = detect_changes()
+        assert "No changes detected" in result
+
+    def test_detect_changes_with_changes(self, mock_load):
+        from codeloom.mcp_server import detect_changes
+
+        with (
+            patch("codeloom.mcp_server._run_git", return_value="auth.py\n"),
+            patch(
+                "codeloom.mcp_server._get_db_path",
+                return_value="/fake/.codeloom/knowledge.db",
+            ),
+        ):
+            result = detect_changes()
+        assert "Change Detection" in result
+        assert "AuthHandler" in result
+        assert "login" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: rename tool
+# ---------------------------------------------------------------------------
+
+
+class TestRenameTool:
+    def test_rename_shows_node_info(self, mock_load):
+        from codeloom.mcp_server import rename
+
+        result = rename("AuthHandler", "NewAuthHandler")
+        assert "AuthHandler" in result
+        assert "NewAuthHandler" in result
+        assert "auth.py" in result
+        assert "class" in result
+
+    def test_rename_not_found(self, mock_load):
+        from codeloom.mcp_server import rename
+
+        result = rename("NonExistent_12345", "NewName")
+        assert "No graph nodes found" in result
+
+    def test_rename_shows_references(self, mock_load):
+        from codeloom.mcp_server import rename
+
+        result = rename("auth.py:1", "AuthHandler")
+        assert "Referenced by" in result or "handle_request" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: explain_flow tool
+# ---------------------------------------------------------------------------
+
+
+class TestExplainFlowTool:
+    def test_explain_flow_shows_call_chain(self, mock_load):
+        from codeloom.mcp_server import explain_flow
+
+        result = explain_flow("handle_request")
+        assert "handle_request" in result
+        assert "server.py" in result
+
+    def test_explain_flow_not_found(self, mock_load):
+        from codeloom.mcp_server import explain_flow
+
+        result = explain_flow("NonExistent_12345")
+        assert "No node found" in result
+
+    def test_explain_flow_entry_point(self, mock_load):
+        from codeloom.mcp_server import explain_flow
+
+        result = explain_flow("auth.py:1")
+        assert "AuthHandler" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: export_subgraph tool
+# ---------------------------------------------------------------------------
+
+
+class TestExportSubgraphTool:
+    def test_export_subgraph_returns_json(self, mock_load):
+        from codeloom.mcp_server import export_subgraph
+
+        result = export_subgraph("auth.py:1", depth=1)
+        import json
+
+        data = json.loads(result)
+        assert "seed" in data
+        assert data["seed"] == "auth.py:1"
+        assert "nodes" in data
+        assert "links" in data
+        assert data["metadata"]["node_count"] > 0
+
+    def test_export_subgraph_not_found(self, mock_load):
+        import json
+
+        from codeloom.mcp_server import export_subgraph
+
+        result = json.loads(export_subgraph("NonExistent_12345"))
+        assert "error" in result
+
+    def test_export_subgraph_node_fields(self, mock_load):
+        import json
+
+        from codeloom.mcp_server import export_subgraph
+
+        data = json.loads(export_subgraph("server.py:10"))
+        for node in data["nodes"]:
+            assert "id" in node
+            assert "label" in node
+            assert "kind" in node
+            assert "file_path" in node
+
+
+# ---------------------------------------------------------------------------
+# Tests: _resolve_node helper
+# ---------------------------------------------------------------------------
+
+
+class TestResolveNode:
+    def test_exact_match(self, mock_load):
+        from codeloom.mcp_server import _resolve_node
+
+        _, G = mock_load
+        matches = _resolve_node("auth.py:1", G)
+        assert matches == ["auth.py:1"]
+
+    def test_partial_match(self, mock_load):
+        from codeloom.mcp_server import _resolve_node
+
+        _, G = mock_load
+        matches = _resolve_node("AuthHandler", G)
+        assert "auth.py:1" in matches
+
+    def test_case_insensitive_partial(self, mock_load):
+        from codeloom.mcp_server import _resolve_node
+
+        _, G = mock_load
+        matches = _resolve_node("authhandler", G)
+        assert "auth.py:1" in matches
+
+    def test_no_match(self, mock_load):
+        from codeloom.mcp_server import _resolve_node
+
+        _, G = mock_load
+        matches = _resolve_node("NonExistent_12345", G)
+        assert matches == []
+
+    def test_label_match(self, mock_load):
+        from codeloom.mcp_server import _resolve_node
+
+        _, G = mock_load
+        matches = _resolve_node("login", G)
+        assert "auth.py:5" in matches
 
 
 # ---------------------------------------------------------------------------

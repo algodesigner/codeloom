@@ -318,18 +318,47 @@ def claude_install(scope: str | None, force: bool = False):
                     {
                         "type": "command",
                         "command": (
-                            "[ -f .codeloom/knowledge.db ] && echo "
-                            '\'{"hookSpecificOutput":{"hookEventName":'
+                            'DB=".codeloom/knowledge.db"; '
+                            '[ ! -f "$DB" ] && exit 0; '
+                            'NODES=$( (sqlite3 "$DB" '
+                            '"SELECT COUNT(*) FROM nodes" 2>/dev/null) || '
+                            'echo "?") ; '
+                            'echo \'{"hookSpecificOutput":{"hookEventName":'
                             '"PreToolUse","additionalContext":"codeloom: '
-                            '5-signal code graph available. STOP grepping. '
-                            'Use `codeloom search \\"<query>\\"` for far '
-                            'better results. Use `codeloom impact '
-                            '\\"<id>\\"` before editing."'
-                            "\"}}' || true"
+                            'graph available (\'$NODES\' nodes). '
+                            'Search first: `codeloom search \\"<query>\\"` '
+                            'Impact before edit: `codeloom impact '
+                            '\\"<symbol>\\"` '
+                            "Full context: `codeloom context \\\"<symbol>\\\"`"
+                            '"}}\''
                         ),
                     }
                 ],
-            }
+            },
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            'DB=".codeloom/knowledge.db"; '
+                            '[ ! -f "$DB" ] && exit 0; '
+                            'NODES=$( (sqlite3 "$DB" '
+                            '"SELECT COUNT(*) FROM nodes" 2>/dev/null) || '
+                            'echo "?") ; '
+                            'echo \'{"hookSpecificOutput":{"hookEventName":'
+                            '"PreToolUse","additionalContext":"codeloom: '
+                            'graph (\'$NODES\' nodes). '
+                            'Use `codeloom search \\"<query>\\"` '
+                            'for semantic search, '
+                            '`codeloom search_keyword \\"<name>\\"` '
+                            'for fast lookup, '
+                            '`codeloom impact \\"<symbol>\\"` '
+                            "before editing.\"}}'"
+                        ),
+                    }
+                ],
+            },
         ],
         "PostToolUse": [
             {
@@ -338,11 +367,14 @@ def claude_install(scope: str | None, force: bool = False):
                     {
                         "type": "command",
                         "command": (
-                            "echo '{\"hookSpecificOutput\":{\"hookEventName\":"
-                            "\"PostToolUse\",\"additionalContext\":\"codeloom: "
-                            "Changes detected. Run `codeloom build . "
-                            "--incremental` to update the code graph and "
-                            "your mental model.\"}}'"
+                            'CHANGED=$(git diff --name-only 2>/dev/null '
+                            '| wc -l | tr -d " "); '
+                            'if [ "$CHANGED" -gt "0" ]; then '
+                            'echo \'{"hookSpecificOutput":{"hookEventName":'
+                            '"PostToolUse","additionalContext":"codeloom: '
+                            '"\'$CHANGED\'" files changed. '
+                            'Run `codeloom build . --incremental` to keep '
+                            "the graph current.\"}}'; fi"
                         ),
                     }
                 ],
@@ -355,7 +387,7 @@ def claude_install(scope: str | None, force: bool = False):
                     {
                         "type": "command",
                         "command": auto_rebuild_command(),
-                        "timeout": 10,
+                        "timeout": 30,
                     }
                 ],
             }
@@ -448,15 +480,18 @@ def codex_install():
                     {
                         "type": "command",
                         "command": (
-                            "[ -f .codeloom/knowledge.db ] && echo "
-                            '\'{"hookSpecificOutput":{"hookEventName":'
+                            'DB=".codeloom/knowledge.db"; '
+                            '[ ! -f "$DB" ] && exit 0; '
+                            'NODES=$( (sqlite3 "$DB" '
+                            '"SELECT COUNT(*) FROM nodes" 2>/dev/null) || '
+                            'echo "?") ; '
+                            'echo \'{"hookSpecificOutput":{"hookEventName":'
                             '"PreToolUse","additionalContext":"codeloom: '
-                            'code graph available. Use `codeloom search '
-                            '\\"<query>\\"` (5-signal HybridRAG) instead '
-                            "of grepping raw files. You can also add "
-                            '`--kind function|class|method` or `--file '
-                            '\\"src/*\\"` to narrow results."'
-                            "\"}}' || true"
+                            'graph (\'$NODES\' nodes). '
+                            'Search: `codeloom search \\"<query>\\"` '
+                            'Fast: `codeloom search_keyword \\"<name>\\"` '
+                            'Impact: `codeloom impact \\"<symbol>\\"` '
+                            'Context: `codeloom context \\"<symbol>\\"`"}}\''
                         ),
                     }
                 ],
@@ -469,7 +504,7 @@ def codex_install():
                     {
                         "type": "command",
                         "command": auto_rebuild_command(),
-                        "timeout": 10,
+                        "timeout": 30,
                     }
                 ],
             }
@@ -543,14 +578,17 @@ def gemini_install():
                     {
                         "type": "command",
                         "command": (
-                            "[ -f .codeloom/knowledge.db ] && echo "
-                            '\'{"hookSpecificOutput":{"additionalContext":'
-                            '"codeloom: code graph available. '
-                            'Use `codeloom search \\"<query>\\"` (5-signal '
-                            "HybridRAG) instead of reading raw files. This "
-                            "single command covers vector, graph, keyword, "
-                            'and community search with RRF fusion."'
-                            "\"}}' || true"
+                            'DB=".codeloom/knowledge.db"; '
+                            '[ ! -f "$DB" ] && exit 0; '
+                            'NODES=$( (sqlite3 "$DB" '
+                            '"SELECT COUNT(*) FROM nodes" 2>/dev/null) || '
+                            'echo "?") ; '
+                            'echo \'{"hookSpecificOutput":{"additionalContext":'
+                            '"codeloom: graph (\'$NODES\' nodes). '
+                            'Search: `codeloom search \\"<query>\\"` '
+                            'Fast: `codeloom search_keyword \\"<name>\\"` '
+                            'Impact: `codeloom impact \\"<symbol>\\"` '
+                            'Context: `codeloom context \\"<symbol>\\"`"}}\''
                         ),
                     }
                 ],
@@ -563,7 +601,7 @@ def gemini_install():
                     {
                         "type": "command",
                         "command": auto_rebuild_command(),
-                        "timeout": 10,
+                        "timeout": 30,
                     }
                 ],
             }
@@ -848,8 +886,10 @@ def opencode_install(scope: str | None, force: bool = False):
 
     if scope == "user":
         mcp_config_path = Path.home() / ".config" / "opencode" / "config.json"
+        plugin_dir = Path.home() / ".config" / "opencode" / "plugins"
     else:
         mcp_config_path = project_root / "opencode.json"
+        plugin_dir = project_root / ".opencode" / "plugins"
 
     mcp_codeloom_config = {
         "codeloom": {
@@ -859,8 +899,30 @@ def opencode_install(scope: str | None, force: bool = False):
     }
 
     merge_json_config(mcp_config_path, mcp_codeloom_config, ["mcp"])
+
+    # Install codeloom plugin
+    plugin_source = (
+        Path(__file__).parent.parent / "scripts" / "opencode_plugin.ts"
+    )
+    if plugin_source.exists():
+        plugin_dest = plugin_dir / "codeloom.ts"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        import shutil
+        if not plugin_dest.exists() or force:
+            shutil.copy2(plugin_source, plugin_dest)
+            human_ok(f"Plugin installed to {plugin_dest}")
+        else:
+            msg = (
+                f"Plugin at {plugin_dest} already exists."
+                " Use --force to overwrite."
+            )
+            human_skip(msg)
+    else:
+        human_warn(f"Plugin source not found: {plugin_source}")
+
     human_done(
-        "Done! OpenCode will discover the skill and MCP tools automatically."
+        "Done! OpenCode will discover the skill, plugin, and MCP tools "
+        "automatically."
     )
 
 
@@ -880,14 +942,28 @@ def opencode_uninstall(scope: str):
 
     if scope == "user":
         skill_dir = Path.home() / ".config" / "opencode" / "skills" / "codeloom"
+        plugin_file = (
+            Path.home() / ".config" / "opencode" / "plugins" / "codeloom.ts"
+        )
     else:
         skill_dir = project_root / ".opencode" / "skills" / "codeloom"
+        plugin_file = project_root / ".opencode" / "plugins" / "codeloom.ts"
 
     if skill_dir.exists():
         shutil.rmtree(skill_dir)
         human_ok(f"Removed {skill_dir}/")
     else:
         human_skip(f"{skill_dir}/ not found")
+
+    if plugin_file.exists():
+        plugin_file.unlink()
+        human_ok(f"Removed {plugin_file}")
+        plugin_parent = plugin_file.parent
+        if plugin_parent.exists() and not any(plugin_parent.iterdir()):
+            plugin_parent.rmdir()
+            human_ok(f"Removed empty {plugin_parent}/ directory")
+    else:
+        human_skip(f"{plugin_file} not found")
 
     agents_md = project_root / "AGENTS.md"
     uninstall_codeloom_context(agents_md)
