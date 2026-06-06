@@ -108,12 +108,12 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ### Structural extraction (functions, classes, calls, imports)
 
-| | | | | | | |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| C | C# | C++ | Common Lisp | Elixir | Go | Haskell |
-| Java | JavaScript | Julia | Kotlin | Lua | Nix | Objective-C |
-| OCaml | Perl | PHP | Python | R | Ruby | Rust |
-| Scala | Shell | Solidity | Swift | Terraform | TypeScript | Zig |
+| | | | | | | | |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| C | C# | C++ | Common Lisp | Elixir | Fortran | Go | Groovy |
+| Haskell | Java | JavaScript | Julia | Kotlin | Lua | Nix | Objective-C |
+| OCaml | Perl | PHP | PowerShell | Python | R | Ruby | Rust |
+| Scala | Shell | Solidity | Swift | Terraform | TypeScript | Zig | |
 
 ### Document & config extraction
 

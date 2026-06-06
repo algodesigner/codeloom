@@ -103,6 +103,11 @@ class TestNameToLang:
             (".lisp", "commonlisp"),
             (".graphql", "graphql"),
             (".pl", "perl"),
+            (".f90", "fortran"),
+            (".f95", "fortran"),
+            (".ps1", "powershell"),
+            (".groovy", "groovy"),
+            (".gradle", "groovy"),
         ]
         for ext, expected in cases:
             p = tmp_path / f"test{ext}"

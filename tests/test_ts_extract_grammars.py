@@ -28,6 +28,13 @@ GRAMMAR_CHECKS: list[tuple[str, str, str, str]] = [
     ("solidity", ".sol", "contract MyContract { }\n", "MyContract"),
     ("ocaml", ".ml", "let add x y = x + y\n", "add"),
     ("commonlisp", ".lisp", "(defun hello () (print \"hi\"))\n", "hello"),
+    # New additions
+    ("fortran", ".f90",
+     "program hello\n  print *, \"Hello\"\nend program hello\n", None),
+    ("powershell", ".ps1",
+     "function Get-Help { param($Name) Write-Output $Name }\n", "Get-Help"),
+    ("groovy", ".groovy", "def greet(name) {\n  println \"Hello $name\"\n}\n",
+     "greet"),
 ]
 
 
