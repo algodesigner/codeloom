@@ -1,6 +1,6 @@
 """codeloom MCP Server — exposes code graph tools to AI agents.
 
-Provides 15 tools over the Model Context Protocol (MCP):
+Provides 16 tools over the Model Context Protocol (MCP):
 - search: 5-signal HybridRAG (vector + keyword + graph + community + RRF)
 - search_keyword: FTS5 keyword-only search (fast, for known names)
 - search_vector: Vector-only semantic search
@@ -16,6 +16,7 @@ Provides 15 tools over the Model Context Protocol (MCP):
 - explain_flow: Trace execution path through call chains
 - export_subgraph: Export focused subgraph as D3.js JSON
 - build: Trigger incremental graph rebuild
+- watch: Watch files for changes and rebuild automatically
 
 Usage:
     codeloom mcp
@@ -26,6 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
 import traceback
 from pathlib import Path
 
@@ -97,6 +99,7 @@ mcp = FastMCP(
 _store = None
 _graph = None
 _db_path: str | None = None
+_reload_lock = threading.Lock()
 
 
 def _get_db_path(source_dir: str | None = None) -> str:
@@ -143,12 +146,24 @@ def _store_path() -> Path:
     return Path(_get_db_path()).parent.parent
 
 
+def _reload():
+    """Force reload after a build."""
+    global _store, _graph
+    with _reload_lock:
+        _store = None
+        _graph = None
+    return _load()
+
+
 def _load():
     """Lazy-load store and graph."""
     global _store, _graph
     if _store is not None and _graph is not None:
         return _store, _graph
-    from codeloom.storage.store import KnowledgeStore
+    with _reload_lock:
+        if _store is not None and _graph is not None:
+            return _store, _graph
+        from codeloom.storage.store import KnowledgeStore
 
     db = _get_db_path()
     if not Path(db).exists():
@@ -1267,6 +1282,109 @@ def build(
         f"- **Edges**: {edges}\n"
         f"- **Files detected**: {files}\n"
         f"- **Database**: {db_info}\n"
+    )
+
+
+class _WatchRebuildHandler:
+    """File system event handler for auto-rebuild on file changes.
+
+    Responds to file modification events by triggering an incremental
+    graph rebuild. Skips directories and unrecognised file extensions.
+    Cooldown prevents rapid re-triggering during bulk writes.
+    """
+
+    def __init__(self, source_path: str, output: str | None = None):
+        self.source_path = source_path
+        self.output = output
+        self.last_rebuild = 0.0
+        self.cooldown = 1.0
+
+    def dispatch(self, event) -> None:
+        """Watchdog-compatible dispatch — routes events to on_modified."""
+        self.on_modified(event)
+
+    def on_modified(self, event) -> None:
+        """Called by watchdog on file modification events."""
+        if event.is_directory:
+            return
+        from codeloom.core.detect import EXT_TO_LANG
+
+        if Path(event.src_path).suffix.lower() not in EXT_TO_LANG:
+            return
+        import time
+
+        now = time.time()
+        if now - self.last_rebuild < self.cooldown:
+            return
+        self.last_rebuild = now
+        logger.info(
+            "Watch: change detected in %s — rebuilding...",
+            Path(event.src_path).name,
+        )
+        try:
+            from codeloom.core.pipeline import run_pipeline
+
+            run_pipeline(
+                str(self.source_path),
+                output_dir=self.output,
+                incremental=True,
+            )
+            _reload()
+            logger.info("Watch: rebuild complete")
+        except Exception as e:
+            logger.error("Watch: rebuild failed: %s", e)
+
+
+@mcp.tool()
+@_safe_tool
+def watch(
+    directory: str = ".",
+    output: str | None = None,
+) -> str:
+    """Watch for file changes and update the code graph in real-time.
+
+    Starts a background file system watcher that triggers incremental
+    builds on file save events. The graph is automatically reloaded
+    after each change so subsequent tool calls see fresh data.
+
+    Uses the watchdog library. Requires 'watchdog' to be installed
+    (pip install watchdog). If unavailable, returns an error message
+    instructing the user to install it.
+
+    Args:
+        directory: Directory to watch (default: current directory).
+        output: Optional output directory for the database.
+    """
+    from pathlib import Path
+
+    source_path = Path(directory).resolve()
+    if not source_path.is_dir():
+        return f"Error: '{directory}' is not a valid directory."
+
+    try:
+        from watchdog.observers import Observer
+    except ImportError:
+        return (
+            "watchdog library not found. "
+            "Install it with: pip install watchdog"
+        )
+
+    handler = _WatchRebuildHandler(str(source_path), output=output)
+    observer = Observer()
+    observer.schedule(handler, str(source_path), recursive=True)
+    observer.start()
+
+    # Stop the observer when the MCP server shuts down
+    import atexit
+    atexit.register(observer.stop)
+
+    return (
+        f"## Watching '{source_path}' for changes\n\n"
+        f"File changes will trigger incremental graph rebuilds "
+        f"and auto-reload the graph for subsequent tool calls.\n"
+        f"- **Directory**: {source_path}\n"
+        f"- **Database**: {_get_db_path()}\n"
+        f"- **Status**: Active\n"
     )
 
 
