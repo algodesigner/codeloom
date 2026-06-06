@@ -35,6 +35,7 @@ GRAMMAR_CHECKS: list[tuple[str, str, str, str]] = [
      "function Get-Help { param($Name) Write-Output $Name }\n", "Get-Help"),
     ("groovy", ".groovy", "def greet(name) {\n  println \"Hello $name\"\n}\n",
      "greet"),
+    ("xml", ".xml", "<root><item>content</item></root>\n", "root"),
 ]
 
 

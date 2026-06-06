@@ -60,6 +60,7 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "csv": [".csv", ".tsv"],
     "docx": [".docx"],
     "xlsx": [".xlsx"],
+    "xml": [".xml", ".xsd", ".xslt", ".plist", ".svg"],
     "odt": [".odt"],
     "ods": [".ods"],
     "odp": [".odp"],

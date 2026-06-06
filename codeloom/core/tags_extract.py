@@ -70,6 +70,7 @@ _LANG_FUNC_NAME: dict[str, str] = {
     "typescript": "language_typescript",
     "php": "language_php",
     "ocaml": "language_ocaml",
+    "xml": "language_xml",
 }
 
 # ---------------------------------------------------------------------------

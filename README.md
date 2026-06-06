@@ -122,7 +122,7 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 | CMake | CSV | CSS | Dockerfile | DOCX | GraphQL |
 | HCL | HTML | JSON | Make | Markdown | ODP |
 | ODS | ODT | PDF | SQL | TOML | XLSX |
-| YAML | | | | | |
+| XML | YAML | | | | |
 
 Plus **100+ natural languages** for search queries via multilingual-e5-small embeddings. Search in any language, find results in any language.
 
