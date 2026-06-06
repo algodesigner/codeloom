@@ -21,7 +21,7 @@
 
 AI coding agents are powerful but fundamentally blind to your codebase structure. When your agent edits `validate_token()`, it has no idea that 47 callers depend on its return type. When it searches for "database connection", it greps blindly through every file. Without a code graph, your agent works like a surgeon operating without an X-ray, skilled but guessing at what's inside.
 
-**codeloom** builds a queryable code graph from your entire codebase — extracting structure from **51 languages and formats**, every function, class, import, call, and document — and exposes it to your AI agent. One install, and your agent stops grepping and starts understanding.
+**codeloom** builds a queryable code graph from your entire codebase — extracting structure from **55 languages and formats**, every function, class, import, call, and document — and exposes it to your AI agent. One install, and your agent stops grepping and starts understanding.
 
 ## Quick Start
 
@@ -110,19 +110,19 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 | | | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| C | C# | C++ | Common Lisp | Elixir | Fortran | Go | Groovy |
-| Haskell | Java | JavaScript | Julia | Kotlin | Lua | Nix | Objective-C |
-| OCaml | Perl | PHP | PowerShell | Python | R | Ruby | Rust |
-| Scala | Shell | Solidity | Swift | Terraform | TypeScript | Zig | |
+| Ada | C | C# | C++ | Common Lisp | Elixir | Fortran | Go |
+| Groovy | Haskell | Java | JavaScript | Julia | Kotlin | Lua | Nix |
+| Objective-C | OCaml | Perl | PHP | PowerShell | Python | R | Ruby |
+| Rust | Scala | Shell | Solidity | Swift | Terraform | TypeScript | Zig |
 
 ### Document & config extraction
 
 | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| CMake | CSV | CSS | Dockerfile | DOCX | GraphQL |
-| HCL | HTML | JSON | Make | Markdown | ODP |
-| ODS | ODT | PDF | SQL | TOML | XLSX |
-| XML | YAML | | | | |
+| CMake | CSV | CSS | DjVu | Dockerfile | DOCX |
+| GraphQL | HCL | HTML | JSON | Make | Markdown |
+| ODP | ODS | ODT | Org | PDF | RST |
+| SQL | TOML | XLSX | XML | YAML | |
 
 Plus **100+ natural languages** for search queries via multilingual-e5-small embeddings. Search in any language, find results in any language.
 

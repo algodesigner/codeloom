@@ -327,3 +327,11 @@ class TestExtractDockerfile:
         result = extract_file("Dockerfile", "dockerfile", "")
         modules = [n for n in result.nodes if n.kind == "module"]
         assert len(modules) == 1
+
+
+class TestExtractDjvu:
+    def test_creates_document_node_without_content(self):
+        result = extract_file("test.djvu", "djvu", "")
+        doc_nodes = [n for n in result.nodes if n.kind == "document"]
+        assert len(doc_nodes) == 1
+        assert doc_nodes[0].name == "test"

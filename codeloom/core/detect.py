@@ -20,6 +20,7 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "java": [".java"],
     "go": [".go"],
     "rust": [".rs"],
+    "ada": [".ada", ".ads", ".adb"],
     "c": [".c", ".h"],
     "cpp": [".cpp", ".hpp", ".cc", ".cxx"],
     "ruby": [".rb"],
@@ -58,12 +59,15 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "pdf": [".pdf"],
     "html": [".html", ".htm"],
     "csv": [".csv", ".tsv"],
+    "djvu": [".djvu", ".djv"],
     "docx": [".docx"],
     "xlsx": [".xlsx"],
     "xml": [".xml", ".xsd", ".xslt", ".plist", ".svg"],
     "odt": [".odt"],
     "ods": [".ods"],
     "odp": [".odp"],
+    "org": [".org"],
+    "rst": [".rst"],
 }
 
 # Fallback for extensionless filenames (e.g. Dockerfile, Makefile)

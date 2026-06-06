@@ -63,6 +63,24 @@ def _create_mini_project(tmp_path: Path) -> Path:
         "library(dplyr)\n"
     )
 
+    (src / "hello.adb").write_text(
+        "with Ada.Text_IO;\n"
+        "procedure Hello is\n"
+        "begin\n"
+        '  Ada.Text_IO.Put_Line("Hello");\n'
+        "end Hello;\n"
+    )
+    (src / "readme.rst").write_text(
+        "Documentation\n"
+        "=============\n"
+        "\n"
+        "Some docs here.\n"
+    )
+    (src / "todo.org").write_text(
+        "* Tasks\n"
+        "** Implement X\n"
+    )
+
     return src
 
 
@@ -131,6 +149,17 @@ class TestPipelineNoEmbed:
         r_names = {d.get("label", n) for n, d in r_funcs}
         assert "mean_val" in r_names
         assert "sd_val" in r_names
+
+    def test_pipeline_extracts_doc_formats(self, tmp_path):
+        src = _create_mini_project(tmp_path)
+        result = run_pipeline(src, output_dir=tmp_path / "out", embed=False)
+
+        langs = {
+            d.get("language")
+            for _, d in result.graph.nodes(data=True)
+        }
+        assert "ada" in langs
+        assert "rst" in langs or "org" in langs
 
     def test_pipeline_builds_relationships(self, tmp_path):
         src = _create_mini_project(tmp_path)

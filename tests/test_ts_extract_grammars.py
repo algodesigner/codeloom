@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from codeloom.core.tags_extract import (
+    _CAPTURE_TO_KIND,
     _cache,
     _get_lang_resources,
     extract_file_tags,
@@ -36,6 +37,11 @@ GRAMMAR_CHECKS: list[tuple[str, str, str, str]] = [
     ("groovy", ".groovy", "def greet(name) {\n  println \"Hello $name\"\n}\n",
      "greet"),
     ("xml", ".xml", "<root><item>content</item></root>\n", "root"),
+    # Phase 2: new additions
+    ("ada", ".ads",
+     "package Hello is\n  procedure Greet;\nend Hello;\n", "Hello"),
+    ("rst", ".rst", "Title\n=====\n\nSome text.\n", "Title"),
+    ("org", ".org", "* Heading\nSome text.\n", "Heading"),
 ]
 
 
@@ -102,3 +108,7 @@ def test_tags_extraction_handles_empty_file(
     # Should not crash, at minimum return module node or None
     if result is not None:
         assert len(result.nodes) >= 1
+
+
+def test_section_capture_kind_registered():
+    assert _CAPTURE_TO_KIND["definition.section"] == "section"

@@ -71,6 +71,9 @@ dependencies = [
     "tree-sitter-powershell>=0.26",
     "tree-sitter-swift>=0.0.1",
     "tree-sitter-xml>=0.7",
+    "tree-sitter-ada>=0.1",
+    "tree-sitter-org>=0.24",
+    "tree-sitter-rst>=0.2",
     "sentence-transformers>=3.0",
     "faiss-cpu>=1.7.4",
     "leidenalg>=0.10",
@@ -91,6 +94,7 @@ Issues = "https://github.com/algodesigner/codeloom/issues"
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0"]
 docs = ["pymupdf>=1.24"]
+djvu = ["djvulibre-python>=0.9"]
 
 [project.scripts]
 codeloom = "codeloom.cli.main:cli"

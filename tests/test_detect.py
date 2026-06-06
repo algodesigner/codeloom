@@ -110,6 +110,11 @@ class TestNameToLang:
             (".gradle", "groovy"),
             (".xml", "xml"),
             (".svg", "xml"),
+            (".djvu", "djvu"),
+            (".ada", "ada"),
+            (".ads", "ada"),
+            (".rst", "rst"),
+            (".org", "org"),
         ]
         for ext, expected in cases:
             p = tmp_path / f"test{ext}"

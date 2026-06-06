@@ -382,6 +382,71 @@ def _extract_pdf(file_path: str, content: str) -> ExtractionResult:
     return result
 
 
+def _extract_djvu(file_path: str, content: str) -> ExtractionResult:
+    """Extract text content from DjVu files using djvulibre-python."""
+    result = ExtractionResult()
+    doc_id = _make_node_id(file_path, Path(file_path).stem, "document")
+    result.nodes.append(
+        ExtractedNode(
+            id=doc_id,
+            name=Path(file_path).stem,
+            kind="document",
+            file_path=file_path,
+            language="djvu",
+            source_snippet="[DjVu document]",
+        )
+    )
+
+    try:
+        from djvu.decode import Context, FileURI
+    except ImportError:
+        result.nodes[0].source_snippet = (
+            "[DjVu — install djvulibre-python for text extraction]"
+        )
+        return result
+
+    try:
+        ctx = Context()
+        doc = ctx.new_document(FileURI(file_path))
+    except Exception:
+        return result
+
+    try:
+        pages = doc.pages
+    except Exception:
+        return result
+
+    for page_num, page in enumerate(pages):
+        try:
+            page_text = page.page_text
+            text = page_text.text if page_text else ""
+        except Exception:
+            continue
+        if not text:
+            continue
+
+        section_id = _make_node_id(
+            file_path,
+            f"page_{page_num + 1}",
+            "section",
+            start_line=page_num + 1,
+        )
+        result.nodes.append(
+            ExtractedNode(
+                id=section_id,
+                name=f"Page {page_num + 1}",
+                kind="section",
+                file_path=file_path,
+                language="djvu",
+                start_line=page_num,
+                source_snippet=text[:MAX_SNIPPET_CHARS],
+            )
+        )
+        result.edges.append(ExtractedEdge(doc_id, section_id, "defines"))
+
+    return result
+
+
 def _extract_html(file_path: str, content: str) -> ExtractionResult:
     """Extract text and structure from HTML files."""
     result = ExtractionResult()
@@ -1658,6 +1723,7 @@ _EXTRACTORS: dict[str, Any] = {
     "javascript": _extract_javascript,
     "typescript": _extract_javascript,  # Close enough for regex fallback
     "r": _extract_r,
+    "djvu": _extract_djvu,
     "cmake": _extract_cmake,
     "dockerfile": _extract_dockerfile,
     "make": _extract_make,

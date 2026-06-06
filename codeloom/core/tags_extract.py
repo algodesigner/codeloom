@@ -40,6 +40,7 @@ _CAPTURE_TO_KIND: dict[str, str] = {
     "definition.constant": "variable",
     "definition.macro": "function",
     "definition.type": "class",
+    "definition.section": "section",
 }
 
 _REFERENCE_CAPTURES: dict[str, tuple[str, str]] = {
