@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codeloom"
-version = "0.1.4"
+version = "0.1.5"
 description = "Local-first code graph builder with 5-signal hybrid search for AI coding agents"
 license = "MIT"
 requires-python = ">=3.10"
@@ -55,6 +55,7 @@ dependencies = [
     "faiss-cpu>=1.7.4",
     "leidenalg>=0.10",
     "igraph>=0.11",
+    "mcp>=1.0",
     "numpy>=1.26",
     "pathspec>=0.12",
     "pyyaml>=6.0",
@@ -70,7 +71,6 @@ Issues = "https://github.com/algodesigner/codeloom/issues"
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0"]
 docs = ["pymupdf>=1.24"]
-mcp = ["mcp>=1.0"]
 
 [project.scripts]
 codeloom = "codeloom.cli.main:cli"

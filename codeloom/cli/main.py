@@ -1361,14 +1361,8 @@ def doctor():
             )
 
     # 4. MCP server dependency
-    try:
-        importlib.import_module("mcp")
-        ok("mcp", "mcp (Model Context Protocol server available)")
-    except ImportError:
-        warn(
-            "mcp",
-            "mcp — not installed (optional, install with: pip install mcp)",
-        )
+    importlib.import_module("mcp")
+    ok("mcp", "mcp (Model Context Protocol server available)")
 
     # 5. Embedding models
     model_cache = Path.home() / ".codeloom" / "models"
