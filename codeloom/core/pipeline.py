@@ -93,7 +93,7 @@ def run_pipeline(
 
     import networkx as nx
 
-    from codeloom.core.extract import extract_file
+    from codeloom.core.ts_extract import extract_file_ts as extract_file
 
     from .build import compute_edge_weights, compute_pagerank
 

@@ -108,18 +108,19 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ### Structural extraction (functions, classes, calls, imports, via tree-sitter)
 
-| | | | |
-|:---:|:---:|:---:|:---:|
-| Python | JavaScript | TypeScript | Go |
-| Rust | Java | C | C++ |
-| C# | Ruby | Swift | Scala |
-| Lua | PHP | Elixir | Kotlin |
-| Objective-C | Terraform/HCL | | |
+| | | | | | |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| C | C# | C++ | Elixir | Go | Java |
+| JavaScript | Kotlin | Lua | Objective-C | PHP | Python |
+| Ruby | Rust | Scala | Shell | Swift | Terraform/HCL |
+| TypeScript | | | | | |
 
 ### Document & config extraction
 
-| YAML | JSON | TOML | Markdown | HTML | CSV |
-| Shell | R | DOCX | XLSX | ODT | ODS | ODP | PDF |
+| | | | | | |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| CSV | DOCX | HTML | JSON | Markdown | ODP |
+| ODS | ODT | PDF | TOML | XLSX | YAML |
 
 Plus **100+ natural languages** for search queries via multilingual-e5-small embeddings. Search in any language, find results in any language.
 

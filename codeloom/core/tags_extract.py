@@ -57,6 +57,7 @@ _LANG_TO_PACKAGE: dict[str, str] = {
     "cpp": "cpp",
     "c_sharp": "c_sharp",
     "csharp": "c_sharp",
+    "shell": "bash",
     "typescript": "typescript",
     "php": "php",
     "objc": "objc",

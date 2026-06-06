@@ -44,6 +44,19 @@ def _create_mini_project(tmp_path: Path) -> Path:
         "# Test Project\nA simple test project for pipeline testing.\n"
     )
 
+    (src / "build.sh").write_text(
+        "#!/bin/bash\n"
+        "build_project() {\n"
+        '  echo "Building..."\n'
+        "}\n"
+        "\n"
+        "test_project() {\n"
+        '  echo "Testing..."\n'
+        "}\n"
+        "\n"
+        "build_project\n"
+    )
+
     return src
 
 
@@ -76,6 +89,7 @@ class TestPipelineNoEmbed:
         # config/doc files are also detected
         detected_langs = {f.language for f in result.detect_result.files}
         assert "python" in detected_langs
+        assert "shell" in detected_langs
 
     def test_pipeline_extracts_classes_and_functions(self, tmp_path):
         src = _create_mini_project(tmp_path)
@@ -85,6 +99,19 @@ class TestPipelineNoEmbed:
         assert "module" in kinds
         # Should extract at least classes or functions
         assert "class" in kinds or "function" in kinds
+
+    def test_pipeline_extracts_shell_functions(self, tmp_path):
+        src = _create_mini_project(tmp_path)
+        result = run_pipeline(src, output_dir=tmp_path / "out", embed=False)
+
+        # Find shell function nodes
+        shell_funcs = [
+            (n, d) for n, d in result.graph.nodes(data=True)
+            if d.get("language") == "shell" and d.get("kind") == "function"
+        ]
+        shell_names = {d.get("label", n) for n, d in shell_funcs}
+        assert "build_project" in shell_names
+        assert "test_project" in shell_names
 
     def test_pipeline_builds_relationships(self, tmp_path):
         src = _create_mini_project(tmp_path)
