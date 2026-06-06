@@ -21,7 +21,7 @@
 
 AI coding agents are powerful but fundamentally blind to your codebase structure. When your agent edits `validate_token()`, it has no idea that 47 callers depend on its return type. When it searches for "database connection", it greps blindly through every file. Without a code graph, your agent works like a surgeon operating without an X-ray, skilled but guessing at what's inside.
 
-**codeloom** builds a queryable code graph from your entire codebase, every function, class, import, call, and document, and exposes it to your AI agent. One install, and your agent stops grepping and starts understanding.
+**codeloom** builds a queryable code graph from your entire codebase — extracting structure from **51 languages and formats**, every function, class, import, call, and document — and exposes it to your AI agent. One install, and your agent stops grepping and starts understanding.
 
 ## Quick Start
 
