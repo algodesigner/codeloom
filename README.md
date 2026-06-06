@@ -108,19 +108,20 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ### Structural extraction (functions, classes, calls, imports)
 
-| | | | | | |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| C | C# | C++ | Elixir | Go | Java |
-| JavaScript | Kotlin | Lua | Objective-C | PHP | Python |
-| R | Ruby | Rust | Scala | Shell | Swift |
-| Terraform/HCL | TypeScript | | | | |
+| | | | | | | |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| C | C# | C++ | Common Lisp | Elixir | Go | Haskell |
+| Java | JavaScript | Julia | Kotlin | Lua | Nix | Objective-C |
+| OCaml | Perl | PHP | Python | R | Ruby | Rust |
+| Scala | Shell | Solidity | Swift | Terraform/HCL | TypeScript | Zig |
 
 ### Document & config extraction
 
 | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| CSV | DOCX | HTML | JSON | Markdown | ODP |
-| ODS | ODT | PDF | TOML | XLSX | YAML |
+| CMake | CSV | CSS | Dockerfile | DOCX | GraphQL |
+| HTML | JSON | Make | Markdown | ODP | ODS |
+| ODT | SQL | TOML | XLSX | YAML | PDF |
 
 Plus **100+ natural languages** for search queries via multilingual-e5-small embeddings. Search in any language, find results in any language.
 

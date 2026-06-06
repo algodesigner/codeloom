@@ -1361,11 +1361,307 @@ def _extract_r(file_path: str, content: str) -> ExtractionResult:
     return result
 
 
+# ---------------------------------------------------------------------------
+# SQL regex extractor
+# ---------------------------------------------------------------------------
+
+_SQL_TABLE = re.compile(
+    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
+    re.IGNORECASE,
+)
+_SQL_VIEW = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(\w+)",
+    re.IGNORECASE,
+)
+_SQL_FUNC = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(\w+)",
+    re.IGNORECASE,
+)
+_SQL_PROC = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+(\w+)",
+    re.IGNORECASE,
+)
+_SQL_INDEX = re.compile(
+    r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
+    re.IGNORECASE,
+)
+
+
+def _extract_sql(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="sql",
+        )
+    )
+
+    for pattern, kind in [
+        (_SQL_TABLE, "class"),
+        (_SQL_VIEW, "class"),
+        (_SQL_FUNC, "function"),
+        (_SQL_PROC, "function"),
+        (_SQL_INDEX, "variable"),
+    ]:
+        for m in pattern.finditer(content):
+            name = m.group(1)
+            line = content[: m.start()].count("\n") + 1
+            node_id = _make_node_id(file_path, name, kind, start_line=line)
+            result.nodes.append(
+                ExtractedNode(
+                    id=node_id,
+                    name=name,
+                    kind=kind,
+                    file_path=file_path,
+                    language="sql",
+                    start_line=line,
+                    source_snippet=_extract_snippet(content, line, line + 30),
+                )
+            )
+            result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Make regex extractor
+# ---------------------------------------------------------------------------
+
+_MAKE_TARGET = re.compile(
+    r"^([a-zA-Z_][a-zA-Z0-9_.-]*)\s*:",
+    re.MULTILINE,
+)
+_MAKE_VAR = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_]*)\s*(?::)?=\s*",
+    re.MULTILINE,
+)
+
+
+def _extract_make(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="make",
+        )
+    )
+
+    for m in _MAKE_TARGET.finditer(content):
+        name = m.group(1)
+        if name in (".PHONY", ".SUFFIXES", ".DEFAULT", ".PRECIOUS",
+                     ".SILENT", ".EXPORT_ALL_VARIABLES", "ifeq", "ifneq",
+                     "ifdef", "ifndef", "else", "endif"):
+            continue
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "function", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="function",
+                file_path=file_path,
+                language="make",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 20),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _MAKE_VAR.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "variable", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="variable",
+                file_path=file_path,
+                language="make",
+                start_line=line,
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# CMake regex extractor
+# ---------------------------------------------------------------------------
+
+_CMAKE_FUNC = re.compile(
+    r"^(?:function|macro)\s*\(\s*(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_CMAKE_TARGET = re.compile(
+    r"^\s*(?:add_executable|add_library|add_custom_target)\s*\(\s*(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_CMAKE_SET = re.compile(
+    r"^\s*set\s*\(\s*(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _extract_cmake(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="cmake",
+        )
+    )
+
+    for m in _CMAKE_FUNC.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "function", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="function",
+                file_path=file_path,
+                language="cmake",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 20),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _CMAKE_TARGET.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "class", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="class",
+                file_path=file_path,
+                language="cmake",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 20),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _CMAKE_SET.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "variable", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="variable",
+                file_path=file_path,
+                language="cmake",
+                start_line=line,
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Dockerfile regex extractor
+# ---------------------------------------------------------------------------
+
+_DOCKER_FROM = re.compile(
+    r"^FROM\s+(\S+)(?:\s+AS\s+(\w+))?",
+    re.MULTILINE | re.IGNORECASE,
+)
+_DOCKER_RUN = re.compile(
+    r"^RUN\s+(.+)$",
+    re.MULTILINE | re.IGNORECASE,
+)
+_DOCKER_COPY = re.compile(
+    r"^COPY\s+(?:--from=\w+\s+)?(\S+)\s+(\S+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_DOCKER_ENV = re.compile(
+    r"^ENV\s+(\w+)(?:=| )",
+    re.MULTILINE | re.IGNORECASE,
+)
+_DOCKER_CMD = re.compile(
+    r"^(?:CMD|ENTRYPOINT)\s+",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _extract_dockerfile(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="dockerfile",
+        )
+    )
+
+    for m in _DOCKER_FROM.finditer(content):
+        name = m.group(2) or m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "class", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="class",
+                file_path=file_path,
+                language="dockerfile",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 5),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _DOCKER_ENV.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "variable", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="variable",
+                file_path=file_path,
+                language="dockerfile",
+                start_line=line,
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    return result
+
+
 _EXTRACTORS: dict[str, Any] = {
     "python": _extract_python,
     "javascript": _extract_javascript,
     "typescript": _extract_javascript,  # Close enough for regex fallback
     "r": _extract_r,
+    "cmake": _extract_cmake,
+    "dockerfile": _extract_dockerfile,
+    "make": _extract_make,
+    "sql": _extract_sql,
     "markdown": _extract_markdown,
     "pdf": _extract_pdf,
     "html": _extract_html,

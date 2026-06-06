@@ -35,6 +35,19 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "r": [".r", ".R"],
     "terraform": [".tf"],
     "hcl": [".hcl"],
+    "cmake": [".cmake"],
+    "commonlisp": [".lisp", ".cl", ".lsp"],
+    "css": [".css"],
+    "dockerfile": [".dockerfile"],
+    "graphql": [".graphql", ".gql"],
+    "haskell": [".hs", ".lhs"],
+    "julia": [".jl"],
+    "nix": [".nix"],
+    "ocaml": [".ml", ".mli"],
+    "perl": [".pl", ".pm"],
+    "solidity": [".sol"],
+    "sql": [".sql"],
+    "zig": [".zig"],
     "markdown": [".md", ".mdx"],
     "yaml": [".yml", ".yaml"],
     "json": [".json"],
@@ -47,6 +60,14 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "odt": [".odt"],
     "ods": [".ods"],
     "odp": [".odp"],
+}
+
+# Fallback for extensionless filenames (e.g. Dockerfile, Makefile)
+NAME_TO_LANG: dict[str, str] = {
+    "dockerfile": "dockerfile",
+    "makefile": "make",
+    "gnumakefile": "make",
+    "cmakelists.txt": "cmake",
 }
 
 EXT_TO_LANG: dict[str, str] = {}
@@ -143,7 +164,8 @@ def _is_sensitive(path: Path) -> bool:
 
 def _classify_file(path: Path) -> str:
     ext = path.suffix.lower()
-    if ext in EXT_TO_LANG:
+    name = path.name.lower()
+    if ext in EXT_TO_LANG or name in NAME_TO_LANG:
         return "code"
     if ext in {".md", ".mdx", ".rst", ".txt"}:
         return "doc"
@@ -180,6 +202,8 @@ def get_file_info(path: Path) -> DetectedFile | None:
 
     ext = path.suffix.lower()
     lang = EXT_TO_LANG.get(ext, "unknown")
+    if lang == "unknown":
+        lang = NAME_TO_LANG.get(path.name.lower(), "unknown")
     file_type = _classify_file(path)
 
     if file_type == "other":

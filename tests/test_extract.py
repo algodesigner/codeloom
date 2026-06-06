@@ -214,3 +214,116 @@ class TestExtractR:
         result = extract_file("test.R", "r", code)
         defines = [e for e in result.edges if e.relation == "defines"]
         assert len(defines) >= 1
+
+
+class TestExtractSQL:
+    def test_extracts_tables(self):
+        code = (
+            "CREATE TABLE users (id INT);\n"
+            "CREATE TABLE IF NOT EXISTS posts (id INT);\n"
+        )
+        result = extract_file("schema.sql", "sql", code)
+        names = {n.name for n in result.nodes}
+        assert "users" in names
+        assert "posts" in names
+
+    def test_extracts_views(self):
+        code = "CREATE VIEW active_users AS SELECT * FROM users;\n"
+        result = extract_file("views.sql", "sql", code)
+        names = {n.name for n in result.nodes}
+        assert "active_users" in names
+
+    def test_extracts_functions_and_procedures(self):
+        code = "CREATE FUNCTION calculate(x INT) RETURNS INT;\n"
+        result = extract_file("funcs.sql", "sql", code)
+        names = {n.name for n in result.nodes}
+        assert "calculate" in names
+
+    def test_extracts_indexes(self):
+        code = "CREATE INDEX idx_users_email ON users(email);\n"
+        result = extract_file("idx.sql", "sql", code)
+        names = {n.name for n in result.nodes}
+        assert "idx_users_email" in names
+
+    def test_module_node_created(self):
+        result = extract_file("data.sql", "sql", "SELECT 1;\n")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1
+        assert modules[0].name == "data"
+
+
+class TestExtractMake:
+    def test_extracts_targets(self):
+        code = "all:\n\tgcc -o prog main.c\n\nclean:\n\trm -f prog\n"
+        result = extract_file("Makefile", "make", code)
+        names = {n.name for n in result.nodes}
+        assert "all" in names
+        assert "clean" in names
+
+    def test_extracts_variables(self):
+        code = "CC = gcc\nCFLAGS = -Wall\n"
+        result = extract_file("Makefile", "make", code)
+        names = {n.name for n in result.nodes}
+        assert "CC" in names
+        assert "CFLAGS" in names
+
+    def test_module_node_created(self):
+        result = extract_file("Makefile", "make", "")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1
+
+
+class TestExtractCMake:
+    def test_extracts_executables(self):
+        code = "add_executable(myapp main.cpp)\n"
+        result = extract_file("CMakeLists.txt", "cmake", code)
+        names = {n.name for n in result.nodes}
+        assert "myapp" in names
+
+    def test_extracts_libraries(self):
+        code = "add_library(mylib STATIC lib.cpp)\n"
+        result = extract_file("CMakeLists.txt", "cmake", code)
+        names = {n.name for n in result.nodes}
+        assert "mylib" in names
+
+    def test_extracts_functions_and_macros(self):
+        code = (
+            'function(hello name)\n'
+            '  message("Hello ${name}")\n'
+            'endfunction()\n'
+        )
+        result = extract_file("CMakeLists.txt", "cmake", code)
+        names = {n.name for n in result.nodes}
+        assert "hello" in names
+
+    def test_extracts_variables(self):
+        code = "set(CMAKE_CXX_STANDARD 17)\n"
+        result = extract_file("CMakeLists.txt", "cmake", code)
+        names = {n.name for n in result.nodes}
+        assert "CMAKE_CXX_STANDARD" in names
+
+    def test_module_node_created(self):
+        result = extract_file("CMakeLists.txt", "cmake", "")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1
+
+
+class TestExtractDockerfile:
+    def test_extracts_from_images(self):
+        code = "FROM ubuntu:22.04 AS base\nFROM python:3.11\n"
+        result = extract_file("Dockerfile", "dockerfile", code)
+        names = {n.name for n in result.nodes}
+        assert "base" in names
+        assert "python:3.11" in names
+
+    def test_extracts_env_vars(self):
+        code = "ENV DEBIAN_FRONTEND=noninteractive\nENV PATH /app:${PATH}\n"
+        result = extract_file("Dockerfile", "dockerfile", code)
+        names = {n.name for n in result.nodes}
+        assert "DEBIAN_FRONTEND" in names
+        assert "PATH" in names
+
+    def test_module_node_created(self):
+        result = extract_file("Dockerfile", "dockerfile", "")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1

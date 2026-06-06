@@ -1,6 +1,11 @@
 """Tests for file detection and classification."""
 
-from codeloom.core.detect import EXT_TO_LANG, detect
+from codeloom.core.detect import (
+    EXT_TO_LANG,
+    NAME_TO_LANG,
+    detect,
+    get_file_info,
+)
 
 
 class TestDetect:
@@ -54,3 +59,59 @@ class TestDetect:
     def test_empty_directory(self, tmp_path):
         result = detect(tmp_path)
         assert len(result.files) == 0
+
+
+class TestNameToLang:
+    def test_extensionless_dockerfile(self, tmp_path):
+        p = tmp_path / "Dockerfile"
+        p.write_text("FROM ubuntu\n")
+        info = get_file_info(p)
+        assert info is not None
+        assert info.language == "dockerfile"
+
+    def test_extensionless_makefile(self, tmp_path):
+        p = tmp_path / "Makefile"
+        p.write_text("all:\n\techo ok\n")
+        info = get_file_info(p)
+        assert info is not None
+        assert info.language == "make"
+
+    def test_dockerfile_dot_ext(self, tmp_path):
+        p = tmp_path / "web.dockerfile"
+        p.write_text("FROM nginx\n")
+        info = get_file_info(p)
+        assert info is not None
+        assert info.language == "dockerfile"
+
+    def test_cmakelists_detected(self, tmp_path):
+        p = tmp_path / "CMakeLists.txt"
+        p.write_text("cmake_minimum_required(VERSION 3.0)\n")
+        info = get_file_info(p)
+        assert info is not None
+        assert info.language == "cmake"
+
+    def test_new_extensions_detected(self, tmp_path):
+        cases = [
+            (".hs", "haskell"),
+            (".jl", "julia"),
+            (".zig", "zig"),
+            (".sol", "solidity"),
+            (".nix", "nix"),
+            (".css", "css"),
+            (".sql", "sql"),
+            (".cmake", "cmake"),
+            (".lisp", "commonlisp"),
+            (".graphql", "graphql"),
+            (".pl", "perl"),
+        ]
+        for ext, expected in cases:
+            p = tmp_path / f"test{ext}"
+            p.write_text("x")
+            info = get_file_info(p)
+            assert info is not None, f"{ext} should be detected"
+            assert info.language == expected, f"{ext} → {expected}"
+
+    def test_mapping_coverage(self):
+        assert NAME_TO_LANG["dockerfile"] == "dockerfile"
+        assert NAME_TO_LANG["makefile"] == "make"
+        assert NAME_TO_LANG["gnumakefile"] == "make"

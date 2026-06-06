@@ -69,6 +69,7 @@ _LANG_TO_PACKAGE: dict[str, str] = {
 _LANG_FUNC_NAME: dict[str, str] = {
     "typescript": "language_typescript",
     "php": "language_php",
+    "ocaml": "language_ocaml",
 }
 
 # ---------------------------------------------------------------------------
