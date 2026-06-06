@@ -229,6 +229,102 @@ class TestSearchTool:
 
         assert "README.md:0" in result
 
+    def test_search_explain_shows_signals(self, mock_load):
+        """--explain mode should annotate seeds with signal contributions."""
+        from codeloom.mcp_server import search
+        from codeloom.query.hybrid import SearchGraph, SearchResult
+
+        mock_graph = SearchGraph(
+            nodes=[
+                SearchResult(
+                    node_id="auth.py:1",
+                    label="AuthHandler",
+                    kind="class",
+                    file_path="auth.py",
+                    start_line=1,
+                    end_line=20,
+                    score=0.85,
+                    source="seed",
+                    signal_contributions={
+                        "code_vector": 0.35,
+                        "text_vector": 0.25,
+                        "graph": 0.10,
+                        "keyword": 0.15,
+                        "community": 0.05,
+                    },
+                ),
+            ],
+            edges=[],
+        )
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
+            result = search("authentication", explain=True)
+
+        assert "signals:" in result
+        assert "code_vector" in result
+        assert "0.35" in result
+        assert "0.25" in result
+
+    def test_search_explain_false_by_default(self, mock_load):
+        """explain=False should omit signal contributions."""
+        from codeloom.mcp_server import search
+        from codeloom.query.hybrid import SearchGraph, SearchResult
+
+        mock_graph = SearchGraph(
+            nodes=[
+                SearchResult(
+                    node_id="auth.py:1",
+                    label="AuthHandler",
+                    kind="class",
+                    file_path="auth.py",
+                    start_line=1,
+                    end_line=20,
+                    score=0.85,
+                    source="seed",
+                    signal_contributions={
+                        "code_vector": 0.35,
+                    },
+                ),
+            ],
+            edges=[],
+        )
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
+            result = search("authentication")  # no explain=True
+
+        assert "signals:" not in result
+
+    def test_search_explain_with_empty_contributions(self, mock_load):
+        """explain=True with empty signal_contributions should not crash."""
+        from codeloom.mcp_server import search
+        from codeloom.query.hybrid import SearchGraph, SearchResult
+
+        mock_graph = SearchGraph(
+            nodes=[
+                SearchResult(
+                    node_id="auth.py:1",
+                    label="AuthHandler",
+                    kind="class",
+                    file_path="auth.py",
+                    start_line=1,
+                    end_line=20,
+                    score=0.5,
+                    source="seed",
+                    signal_contributions={},
+                ),
+            ],
+            edges=[],
+        )
+        with patch(
+            "codeloom.query.hybrid.hybrid_search", return_value=mock_graph
+        ):
+            result = search("auth", explain=True)
+
+        assert "auth.py:1" in result
+        assert "signals:" not in result
+
 
 # ---------------------------------------------------------------------------
 # Tests: node tool

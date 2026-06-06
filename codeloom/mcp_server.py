@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import traceback
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -35,6 +36,33 @@ from codeloom.cli._helpers import suppress_library_logs
 suppress_library_logs()
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_tool(func):
+    """Decorator: wrap any MCP tool to catch exceptions and return
+    a helpful error string instead of crashing."""
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except FileNotFoundError as e:
+            return str(e)
+        except Exception as e:
+            logger.error(
+                "Tool %s failed: %s\n%s",
+                func.__name__,
+                e,
+                traceback.format_exc(),
+            )
+            return (
+                f"Error in {func.__name__}: {e}. "
+                f"Run 'codeloom doctor' for diagnostics or "
+                f"'codeloom build .' to rebuild the graph."
+            )
+
+    return wrapper
 
 mcp = FastMCP(
     "codeloom",
@@ -206,6 +234,7 @@ def _run_git(args: list[str], cwd: str | None = None) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def search(
     query: str,
     top_k: int = 30,
@@ -214,6 +243,7 @@ def search(
     file_pattern: str | None = None,
     include_tests: bool = False,
     snippets: bool = True,
+    explain: bool = False,
 ) -> str:
     """Search the code graph using full 5-signal HybridRAG.
 
@@ -245,10 +275,11 @@ def search(
         snippet_count=3 if snippets else 0,
     )
     source_dir = str(_store_path()) + "/"
-    return graph.to_text(source_dir=source_dir)
+    return graph.to_text(source_dir=source_dir, explain=explain)
 
 
 @mcp.tool()
+@_safe_tool
 def search_keyword(query: str, top_k: int = 20) -> str:
     """Fast keyword-only search using FTS5 (BM25 ranking).
 
@@ -281,6 +312,7 @@ def search_keyword(query: str, top_k: int = 20) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def search_vector(query: str, top_k: int = 20, fast: bool = False) -> str:
     """Vector-only semantic search (no keyword, no graph signals).
 
@@ -339,8 +371,52 @@ def search_vector(query: str, top_k: int = 20, fast: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _risk_score(G, source_id: str, target_id: str) -> str:
+    """Heuristic risk level for a dependency relationship."""
+    s_fp = G.nodes[source_id].get("file_path", "")
+    t_fp = G.nodes[target_id].get("file_path", "")
+    # Within-file edges are lower risk regardless of relation
+    if s_fp and t_fp and s_fp == t_fp and s_fp != "":
+        return "low"
+    edge_data = G.get_edge_data(source_id, target_id)
+    if edge_data:
+        rel = edge_data.get("relation", "")
+        if rel in ("inherits", "implements"):
+            return "high"
+        if rel == "calls":
+            return "high"
+        if rel in ("references", "imports"):
+            return "medium"
+    return "medium"
+
+
+def _group_by_file(
+    G, node_ids: list[str], target_fp: str
+) -> dict[str, list[tuple[str, str, str]]]:
+    """Group nodes into same-file and cross-file."""
+    groups: dict[str, list[tuple[str, str, str]]] = {
+        "same file": [], "cross-file": []
+    }
+    for nid in node_ids:
+        fp = G.nodes[nid].get("file_path", "?")
+        label = _node_label(G, nid)
+        kind = G.nodes[nid].get("kind", "?")
+        entry = (label, kind, fp)
+        if fp == target_fp:
+            groups["same file"].append(entry)
+        else:
+            groups["cross-file"].append(entry)
+    return groups
+
+
 @mcp.tool()
-def impact(node_id: str, max_depth: int = 3) -> str:
+@_safe_tool
+def impact(
+    node_id: str,
+    max_depth: int = 3,
+    kind: str | None = None,
+    format: str = "text",
+) -> str:
     """Analyze the 'blast radius' of a change.
 
     Returns all symbols that transitively depend on the given node.
@@ -349,30 +425,99 @@ def impact(node_id: str, max_depth: int = 3) -> str:
     Args:
         node_id: Full or partial node ID to analyze.
         max_depth: How many levels of dependents to trace (default 3).
+        kind: Filter by edge relation (e.g. 'calls', 'imports', 'references',
+              'inherits'). Defaults to all relations.
+        format: Output format ('text' or 'json').
     """
+    import json as json_mod
+
     import networkx as nx
 
     store, G = _load()
     matches = _resolve_node(node_id, G)
     if not matches:
-        return f"No node found matching '{node_id}'."
+        return (
+            json_mod.dumps({"error": f"No node found matching '{node_id}'."})
+            if format == "json"
+            else f"No node found matching '{node_id}'."
+        )
     target = matches[0]
 
-    R = G.reverse(copy=False)
+    target_fp = G.nodes[target].get("file_path", "")
+    rgraph = G.reverse(copy=False)
     label = _node_label(G, target)
-    lines = [f"## Impact Analysis (Blast Radius) for '{label}'\n"]
 
+    levels: list[dict] = []
     for d in range(1, max_depth + 1):
-        layer = nx.descendants_at_distance(R, target, d)
+        layer = nx.descendants_at_distance(rgraph, target, d)
         if not layer:
             break
-        lines.append(f"### Level {d} Dependents")
+        if kind:
+            filtered = set()
+            for nid in layer:
+                edge_data = rgraph.get_edge_data(target, nid)
+                if edge_data and edge_data.get("relation") == kind:
+                    filtered.add(nid)
+            if not filtered:
+                continue
+            layer = filtered
+
+        level_nodes: list[dict] = []
         for nid in sorted(layer):
             data = G.nodes[nid]
-            lines.append(
-                f"- {_node_label(G, nid)} ({data.get('kind', '?')}) "
-                f"in {data.get('file_path', '?')}"
-            )
+            snippet = ""
+            fp = data.get("file_path", "")
+            sl = data.get("start_line")
+            if fp and sl:
+                snippet = _read_file_snippet(fp, sl, context=1)
+            risk = _risk_score(G, nid, target)
+            level_nodes.append({
+                "id": nid,
+                "label": data.get("label", nid),
+                "kind": data.get("kind", "?"),
+                "file_path": fp,
+                "start_line": sl,
+                "risk": risk,
+                "snippet": snippet,
+            })
+        levels.append({"depth": d, "nodes": level_nodes})
+
+    if format == "json":
+        return json_mod.dumps(
+            {
+                "target": target,
+                "target_label": label,
+                "levels": levels,
+                "total_depth": len(levels),
+            },
+            indent=2,
+        )
+
+    lines = [f"## Impact Analysis (Blast Radius) for '{label}'\n"]
+    for level in levels:
+        d = level["depth"]
+        groups = _group_by_file(
+            G, [n["id"] for n in level["nodes"]], target_fp
+        )
+        same = groups["same file"]
+        cross = groups["cross-file"]
+        lines.append(
+            f"### Level {d} Dependents "
+            f"({len(level['nodes'])} total, "
+            f"{len(same)} same file, {len(cross)} cross-file)"
+        )
+        if cross:
+            lines.append("**Cross-file:**")
+            for lbl, knd, fp in cross[:10]:
+                lines.append(f"- {lbl} ({knd}) in `{fp}`")
+            if len(cross) > 10:
+                lines.append(f"  ... and {len(cross) - 10} more")
+        if same:
+            lines.append("**Same file:**")
+            for lbl, knd, _ in same[:5]:
+                lines.append(f"- {lbl} ({knd})")
+            if len(same) > 5:
+                lines.append(f"  ... and {len(same) - 5} more")
         lines.append("")
 
     if len(lines) == 1:
@@ -381,7 +526,13 @@ def impact(node_id: str, max_depth: int = 3) -> str:
 
 
 @mcp.tool()
-def dependencies(node_id: str, max_depth: int = 3) -> str:
+@_safe_tool
+def dependencies(
+    node_id: str,
+    max_depth: int = 3,
+    kind: str | None = None,
+    format: str = "text",
+) -> str:
     """Analyze the upstream dependencies of a symbol.
 
     Returns all symbols that the given node transitively depends on.
@@ -390,29 +541,98 @@ def dependencies(node_id: str, max_depth: int = 3) -> str:
     Args:
         node_id: Full or partial node ID to analyze.
         max_depth: How many levels to trace (default 3).
+        kind: Filter by edge relation (e.g. 'calls', 'imports', 'inherits').
+              Defaults to all relations.
+        format: Output format ('text' or 'json').
     """
+    import json as json_mod
+
     import networkx as nx
 
     store, G = _load()
     matches = _resolve_node(node_id, G)
     if not matches:
-        return f"No node found matching '{node_id}'."
+        return (
+            json_mod.dumps({"error": f"No node found matching '{node_id}'."})
+            if format == "json"
+            else f"No node found matching '{node_id}'."
+        )
     target = matches[0]
 
+    target_fp = G.nodes[target].get("file_path", "")
     label = _node_label(G, target)
-    lines = [f"## Dependency Analysis for '{label}'\n"]
 
+    levels: list[dict] = []
     for d in range(1, max_depth + 1):
         layer = nx.descendants_at_distance(G, target, d)
         if not layer:
             break
-        lines.append(f"### Level {d} Dependencies")
+        if kind:
+            filtered = set()
+            for nid in layer:
+                edge_data = G.get_edge_data(target, nid)
+                if edge_data and edge_data.get("relation") == kind:
+                    filtered.add(nid)
+            if not filtered:
+                continue
+            layer = filtered
+
+        level_nodes: list[dict] = []
         for nid in sorted(layer):
             data = G.nodes[nid]
-            lines.append(
-                f"- {_node_label(G, nid)} ({data.get('kind', '?')}) "
-                f"in {data.get('file_path', '?')}"
-            )
+            snippet = ""
+            fp = data.get("file_path", "")
+            sl = data.get("start_line")
+            if fp and sl:
+                snippet = _read_file_snippet(fp, sl, context=1)
+            risk = _risk_score(G, target, nid)
+            level_nodes.append({
+                "id": nid,
+                "label": data.get("label", nid),
+                "kind": data.get("kind", "?"),
+                "file_path": fp,
+                "start_line": sl,
+                "risk": risk,
+                "snippet": snippet,
+            })
+        levels.append({"depth": d, "nodes": level_nodes})
+
+    if format == "json":
+        return json_mod.dumps(
+            {
+                "target": target,
+                "target_label": label,
+                "levels": levels,
+                "total_depth": len(levels),
+            },
+            indent=2,
+        )
+
+    lines = [f"## Dependency Analysis for '{label}'\n"]
+    for level in levels:
+        d = level["depth"]
+        groups = _group_by_file(
+            G, [n["id"] for n in level["nodes"]], target_fp
+        )
+        same = groups["same file"]
+        cross = groups["cross-file"]
+        lines.append(
+            f"### Level {d} Dependencies "
+            f"({len(level['nodes'])} total, "
+            f"{len(same)} same file, {len(cross)} cross-file)"
+        )
+        if cross:
+            lines.append("**Cross-file:**")
+            for lbl, knd, fp in cross[:10]:
+                lines.append(f"- {lbl} ({knd}) in `{fp}`")
+            if len(cross) > 10:
+                lines.append(f"  ... and {len(cross) - 10} more")
+        if same:
+            lines.append("**Same file:**")
+            for lbl, knd, _ in same[:5]:
+                lines.append(f"- {lbl} ({knd})")
+            if len(same) > 5:
+                lines.append(f"  ... and {len(same) - 5} more")
         lines.append("")
 
     if len(lines) == 1:
@@ -421,6 +641,7 @@ def dependencies(node_id: str, max_depth: int = 3) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def context(node_id: str) -> str:
     """Get a 360-degree view of a symbol.
 
@@ -504,6 +725,7 @@ def context(node_id: str) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def node(node_id: str) -> str:
     """Get detailed information about a specific node in the code graph.
 
@@ -559,6 +781,7 @@ def node(node_id: str) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def stats() -> str:
     """Get code graph statistics.
 
@@ -608,6 +831,7 @@ def stats() -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def list_repos() -> str:
     """List all available code graphs and their basic stats.
 
@@ -646,6 +870,7 @@ def list_repos() -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def communities(search_query: str = "", level: int = -1) -> str:
     """Browse community clusters.
 
@@ -716,6 +941,7 @@ def communities(search_query: str = "", level: int = -1) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def detect_changes() -> str:
     """Detect which graph nodes are affected by unstaged git changes.
 
@@ -759,6 +985,7 @@ def detect_changes() -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def rename(old_name: str, new_name: str) -> str:
     """Find all locations where a symbol is used across the codebase.
 
@@ -812,6 +1039,7 @@ def rename(old_name: str, new_name: str) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def explain_flow(entry_node_id: str, max_depth: int = 5) -> str:
     """Trace an execution flow through call chains starting from a node.
 
@@ -869,6 +1097,7 @@ def explain_flow(entry_node_id: str, max_depth: int = 5) -> str:
 
 
 @mcp.tool()
+@_safe_tool
 def export_subgraph(
     node_id: str, depth: int = 2, max_nodes: int = 50
 ) -> str:
@@ -963,6 +1192,7 @@ def export_subgraph(
 
 
 @mcp.tool()
+@_safe_tool
 def build(directory: str = ".", incremental: bool = True) -> str:
     """Build or rebuild the code graph from source code.
 

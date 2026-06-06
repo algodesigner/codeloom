@@ -92,7 +92,7 @@ Repository = "https://github.com/algodesigner/codeloom"
 Issues = "https://github.com/algodesigner/codeloom/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0"]
+dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0", "hypothesis>=6.0"]
 docs = ["pymupdf>=1.24"]
 djvu = ["djvulibre-python>=0.9"]
 

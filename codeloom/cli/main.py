@@ -437,6 +437,15 @@ def build(
         " with source snippets (0 = disabled)"
     ),
 )
+@click.option(
+    "--explain/--no-explain",
+    "explain",
+    default=False,
+    help=(
+        "Annotate each result with per-signal score breakdown"
+        " (code_vector, text_vector, graph, keyword, community)"
+    ),
+)
 @click.pass_context
 def search(
     ctx,
@@ -450,6 +459,7 @@ def search(
     file_pattern: str | None = None,
     include_tests: bool = False,
     snippets: int = 0,
+    explain: bool = False,
 ):
     """Search the code graph with hybrid vector + graph + keyword search."""
     from codeloom.query.hybrid import hybrid_search
@@ -494,7 +504,7 @@ def search(
 
         click.echo(_json.dumps(graph.to_json(source_dir=source_dir_str)))
     else:
-        click.echo(graph.to_text(source_dir=source_dir_str))
+        click.echo(graph.to_text(source_dir=source_dir_str, explain=explain))
     store.close()
 
 
@@ -1264,8 +1274,191 @@ def show_node(ctx, node_id: str, db: str | None, source_dir: str):
 register_integration_commands(cli)
 
 
+def _repair_indexes(conn, cwd, ok, warn, fail):
+    """Auto-repair missing indexes and orphaned data."""
+    import sqlite3
+
+    # 1. Rebuild FTS5 if missing
+    try:
+        conn.execute("SELECT COUNT(*) FROM nodes_fts").fetchone()
+    except sqlite3.OperationalError:
+        warn("repair", "FTS5 index missing — rebuilding...")
+        try:
+            conn.executescript("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts USING fts5(
+                    node_id, label, signature, docstring, snippet,
+                    content='nodes', content_rowid='rowid'
+                );
+                INSERT INTO nodes_fts(rowid, node_id, label, signature,
+                    docstring, snippet)
+                SELECT rowid, id, label, signature, docstring,
+                    COALESCE(source_snippet, '')
+                FROM nodes;
+            """)
+            conn.commit()
+            ok("repair", "FTS5 index rebuilt")
+        except Exception as e:
+            fail("repair", f"FTS5 rebuild failed: {e}")
+
+    # 2. Rebuild FAISS if missing
+    faiss_code = cwd / ".codeloom" / "faiss_code.index"
+    faiss_text = cwd / ".codeloom" / "faiss_text.index"
+    if not faiss_code.exists() or not faiss_text.exists():
+        warn("repair", "FAISS indexes missing — rebuilding requires "
+             "running 'codeloom build .'")
+        # FAISS rebuild requires full re-embedding — defer to build
+
+    # 3. Prune orphaned edges (edges whose target node is missing)
+    try:
+        orphaned = conn.execute("""
+            SELECT COUNT(*) FROM edges e
+            WHERE NOT EXISTS (
+                SELECT 1 FROM nodes n WHERE n.id = e.target
+            )
+        """).fetchone()[0]
+        if orphaned > 0:
+            warn("repair", f"{orphaned} orphaned edges found — removing...")
+            conn.execute("""
+                DELETE FROM edges WHERE NOT EXISTS (
+                    SELECT 1 FROM nodes n WHERE n.id = edges.target
+                )
+            """)
+            conn.commit()
+            ok("repair", f"Removed {orphaned} orphaned edges")
+    except Exception as e:
+        warn("repair", f"Could not prune orphaned edges: {e}")
+
+
+def _run_deep_checks(conn, cwd, ok, warn, fail):
+    """Run deep graph integrity checks for doctor --deep."""
+    import networkx as nx
+
+    from codeloom.storage.store import KnowledgeStore
+
+    db_path = str(cwd / ".codeloom" / "knowledge.db")
+    store = KnowledgeStore(db_path)
+    G = store.load_graph()
+    n_nodes = G.number_of_nodes()
+    n_edges = G.number_of_edges()
+
+    # 1. Dangling edges — target node missing from graph
+    dangling = 0
+    for u, v in G.edges():
+        if not G.has_node(v):
+            dangling += 1
+    if dangling == 0:
+        ok("graph", "No dangling edges")
+    else:
+        warn("graph", f"{dangling} dangling edges (target node missing)")
+
+    # 2. Cycles
+    try:
+        cycles = list(nx.simple_cycles(G))
+        if cycles:
+            sample = [c[:5] for c in cycles[:3]]
+            warn(
+                "graph",
+                f"{len(cycles)} cycle(s) found — samples: {sample}",
+            )
+        else:
+            ok("graph", "No cycles detected")
+    except (nx.NetworkXNoCycle, nx.NetworkXError):
+        ok("graph", "No cycles detected")
+
+    # 3. Embedding coverage
+    try:
+        n_with_code_vec = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE code_vec IS NOT NULL"
+        ).fetchone()[0]
+        n_with_text_vec = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE text_vec IS NOT NULL"
+        ).fetchone()[0]
+        coverage_code = n_with_code_vec / max(n_nodes, 1) * 100
+        coverage_text = n_with_text_vec / max(n_nodes, 1) * 100
+        ok(
+            "embeddings",
+            f"Code vec coverage: {coverage_code:.0f}% "
+            f"({n_with_code_vec}/{n_nodes})",
+        )
+        ok(
+            "embeddings",
+            f"Text vec coverage: {coverage_text:.0f}% "
+            f"({n_with_text_vec}/{n_nodes})",
+        )
+    except Exception:
+        warn("embeddings", "Could not compute embedding coverage")
+
+    # 4. Cross-reference resolution rate
+    try:
+        total_refs = conn.execute(
+            "SELECT COUNT(*) FROM edges WHERE relation IN "
+            "('calls', 'references', 'imports', 'inherits', 'implements')"
+        ).fetchone()[0]
+        resolved_refs = conn.execute(
+            "SELECT COUNT(*) FROM resolved_references"
+        ).fetchone()[0]
+        if total_refs > 0:
+            rate = resolved_refs / total_refs * 100
+            ok(
+                "graph",
+                f"Cross-ref resolution: {rate:.0f}% "
+                f"({resolved_refs}/{total_refs})",
+            )
+        else:
+            ok("graph", "No cross-references to resolve")
+    except Exception:
+        warn("graph", "Could not compute cross-reference resolution rate")
+
+    # 5. Index staleness — compare graph node count vs FTS5 vs FAISS
+    try:
+        fts_count = conn.execute(
+            "SELECT COUNT(*) FROM nodes_fts"
+        ).fetchone()[0]
+        if fts_count != n_nodes:
+            warn(
+                "index",
+                f"FTS5 index has {fts_count} entries vs "
+                f"{n_nodes} graph nodes — consider rebuilding",
+            )
+        else:
+            ok("index", "FTS5 index count matches graph node count")
+    except Exception:
+        warn("index", "Could not check FTS5 staleness")
+
+    # 6. Graph density and connectivity
+    density = n_edges / max(n_nodes * (n_nodes - 1), 1)
+    ok("graph", f"Density: {density:.6f}")
+    try:
+        n_components = nx.number_weakly_connected_components(G)
+        if n_components > 1:
+            warn(
+                "graph",
+                f"{n_components} weakly connected components"
+                " — some nodes may be isolated",
+            )
+        else:
+            ok("graph", "Single connected component")
+    except Exception:
+        pass
+
+    store.close()
+
+
 @cli.command()
-def doctor():
+@click.option(
+    "--deep",
+    is_flag=True,
+    default=False,
+    help="Run deep checks: cycles, dangling edges, embedding coverage",
+)
+@click.option(
+    "--fix",
+    "auto_fix",
+    is_flag=True,
+    default=False,
+    help="Auto-repair missing indexes and orphaned data (implies --deep)",
+)
+def doctor(deep: bool = False, auto_fix: bool = False):
     """Check codeloom installation health and code graph integrity.
 
     Verifies dependencies, model availability, database integrity,
@@ -1392,11 +1585,21 @@ def doctor():
         try:
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row
-            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
-            if integrity == "ok":
-                ok("database", "Database integrity: OK")
+
+            if deep:
+                deep_integrity = conn.execute(
+                    "PRAGMA integrity_check"
+                ).fetchone()[0]
+                if deep_integrity == "ok":
+                    ok("database", "Deep integrity check: OK")
+                else:
+                    fail("database", f"Deep integrity: {deep_integrity}")
             else:
-                fail("database", f"Database integrity: {integrity}")
+                integrity = conn.execute("PRAGMA quick_check").fetchone()[0]
+                if integrity == "ok":
+                    ok("database", "Database quick check: OK")
+                else:
+                    fail("database", f"Database quick check: {integrity}")
 
             try:
                 n_nodes = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[
@@ -1456,6 +1659,15 @@ def doctor():
                     "No FAISS indexes"
                     " — run 'codeloom build .' to generate embeddings",
                 )
+
+            # --deep: additional graph-level checks
+            effective_deep = deep or auto_fix
+            if effective_deep and n_nodes > 0:
+                _run_deep_checks(conn, cwd, ok, warn, fail)
+
+            # --fix: auto-repair
+            if auto_fix and n_nodes > 0:
+                _repair_indexes(conn, cwd, ok, warn, fail)
 
             conn.close()
         except sqlite3.DatabaseError as e:

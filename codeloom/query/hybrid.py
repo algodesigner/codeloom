@@ -261,7 +261,7 @@ class SearchGraph:
     isolated: list[SearchResult] = field(default_factory=list)
     hint: str = ""
 
-    def to_text(self, source_dir: str = "") -> str:
+    def to_text(self, source_dir: str = "", explain: bool = False) -> str:
         """Compact graph response shared by MCP and CLI.
 
         Format:
@@ -270,6 +270,10 @@ class SearchGraph:
             edges:
             node_a -relation-> node_b
             node_b -relation-> node_c
+
+        Args:
+            source_dir: Prefix to strip from node IDs.
+            explain: If True, annotate each seed with per-signal scores.
         """
 
         def _s(node_id: str) -> str:
@@ -282,7 +286,14 @@ class SearchGraph:
         for n in self.nodes:
             if n.source == "seed":
                 sid = _s(n.node_id)
-                seed_ids.append(f"{sid} (score: {n.score})")
+                entry = f"{sid} (score: {n.score})"
+                if explain and n.signal_contributions:
+                    signals = "  ".join(
+                        f"{k}={v:.3f}"
+                        for k, v in sorted(n.signal_contributions.items())
+                    )
+                    entry += f"\n  │ signals: {signals}"
+                seed_ids.append(entry)
                 if n.context_snippet:
                     for line in n.context_snippet.split("\n"):
                         seed_ids.append(f"  │ {line}")

@@ -29,6 +29,15 @@ pytest tests/test_store.py
 
 # Run with verbose output
 pytest -v
+
+# Run property-based tests
+pytest tests/test_graph_properties.py -v
+
+# Run stress tests (small only)
+SKIP_STRESS=0 pytest tests/stress/ -v
+
+# Run full stress suite (slow — includes 10k-file repo)
+FULL_STRESS=1 SKIP_STRESS=0 pytest tests/stress/ -v
 ```
 
 ## Code Style

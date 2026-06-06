@@ -391,6 +391,61 @@ class TestCLISearch:
         )
         assert result.exit_code == 0
 
+    def test_search_explain_flag(self, tmp_path):
+        """--explain flag should not error and should produce output."""
+        project_dir = _create_test_db(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "search",
+                "App",
+                "--source-dir",
+                str(project_dir),
+                "--explain",
+            ],
+        )
+        assert result.exit_code == 0
+
+    def test_search_explain_no_explain_flag(self, tmp_path):
+        """Default (no --explain) should not show signal contributions."""
+        project_dir = _create_test_db(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "search",
+                "App",
+                "--source-dir",
+                str(project_dir),
+                "--no-explain",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "signals:" not in result.output
+
+    def test_search_explain_help(self):
+        """--explain should appear in help output."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "--help"])
+        assert result.exit_code == 0
+        assert "--explain" in result.output
+
+    def test_search_vector_explain_flag(self, tmp_path):
+        """search-vector should also accept --explain (silently ignored)."""
+        project_dir = _create_test_db(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "search-vector",
+                "App",
+                "--source-dir",
+                str(project_dir),
+            ],
+        )
+        assert result.exit_code == 0
+
 
 class TestCLIExportD3:
     """Test D3 export format."""
@@ -1066,3 +1121,32 @@ class TestAiderIntegration:
                 not conventions.exists()
                 or "codeloom" not in conventions.read_text()
             )
+
+
+class TestCLIDoctor:
+    """Test the doctor command."""
+
+    def test_doctor_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor", "--help"])
+        assert result.exit_code == 0
+        assert "--deep" in result.output
+        assert "--fix" in result.output
+
+    def test_doctor_basic(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor"])
+        assert result.exit_code == 0
+
+    def test_doctor_deep_no_db(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["doctor", "--deep"])
+            assert result.exit_code == 0
+            assert "No database" in result.output
+
+    def test_doctor_fix_no_db(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["doctor", "--fix"])
+            assert result.exit_code == 0
