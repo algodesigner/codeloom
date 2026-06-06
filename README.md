@@ -108,6 +108,8 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ### Structural extraction (functions, classes, calls, imports)
 
+Full tree-sitter tags.scm-based resolution for 17+ core languages. All 55 languages get module-level indexing, source snippets, and embeddings — structural detail depends on optional `tree-sitter-<lang>` packages.
+
 | | | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Ada | C | C# | C++ | Common Lisp | Elixir | Fortran | Go |
@@ -193,6 +195,8 @@ Benchmarks on codeloom's own codebase (~3,500 lines, 90 files, 1,300 nodes):
 
 All commands output compact text by default (designed for AI agent consumption).
 
+### CLI Commands
+
 | Command | Description |
 |---------|-------------|
 | `build <dir>` | Build code graph (`--incremental`, `--git`) |
@@ -200,25 +204,26 @@ All commands output compact text by default (designed for AI agent consumption).
 | `search <query>` | 5-signal HybridRAG with subgraph + snippets |
 | `search-keyword <query>` | FTS5 keyword matching only |
 | `search-vector <query>` | Vector similarity only |
-| `context <id>` | 360-degree symbol view |
-| `impact <id>` | Blast radius analysis |
-| `dependencies <id>` | Upstream dependency analysis |
-| `detect-changes` | Map unstaged changes to affected nodes |
-| `rename <old> <new>` | Find locations for safe rename |
-| `explain-flow <id>` | Trace execution path |
-| `export-subgraph <id>` | Export subgraph as D3.js JSON |
-| `list-repos` | List available code graphs |
-| `node <id>` | Node details with fuzzy matching |
+| `search-graph <query>` | Graph expansion only (BFS from vector seeds) |
+| `search-community <query>` | Community cluster matching only |
 | `stats` | Graph statistics |
+| `node <id>` | Node details with fuzzy matching |
 | `communities` | List or search communities |
 | `query` | Interactive search REPL |
 | `export` | Export as JSON, GraphML, or D3.js |
 | `visualize` | Interactive HTML visualization |
-| `setup` | One-step setup for all detected agents |
+| `setup [platform]` | One-step setup for all detected agents |
+| `uninstall [platform]` | Remove integration for a given platform |
 | `doctor` | Check installation health |
-| `clean` | Remove .codeloom/ database |
+| `clean` | Remove `.codeloom/` database |
 | `mcp` | Start MCP server |
 | `<platform> install\|uninstall` | Manage agent integration |
+
+### MCP-Only Tools
+
+These are available via `codeloom mcp` — see the [MCP tools section](#15-mcp-tools-at-a-glance) above:
+
+`impact` · `dependencies` · `context` · `detect_changes` · `rename` · `explain_flow` · `export_subgraph` · `list_repos`
 
 ---
 
@@ -228,7 +233,7 @@ All commands output compact text by default (designed for AI agent consumption).
 - ~180MB disk for embedding models (cached on first use)
 
 ```bash
-# Optional: PDF extraction
+# Optional: PDF, DOCX, XLSX, ODF extraction
 pip install codeloom[docs]
 ```
 
