@@ -57,6 +57,12 @@ def _create_mini_project(tmp_path: Path) -> Path:
         "build_project\n"
     )
 
+    (src / "analyze.R").write_text(
+        "mean_val <- function(x) mean(x, na.rm = TRUE)\n"
+        "sd_val <- function(x) sd(x, na.rm = TRUE)\n"
+        "library(dplyr)\n"
+    )
+
     return src
 
 
@@ -112,6 +118,19 @@ class TestPipelineNoEmbed:
         shell_names = {d.get("label", n) for n, d in shell_funcs}
         assert "build_project" in shell_names
         assert "test_project" in shell_names
+
+    def test_pipeline_extracts_r_functions(self, tmp_path):
+        src = _create_mini_project(tmp_path)
+        result = run_pipeline(src, output_dir=tmp_path / "out", embed=False)
+
+        # Find R function nodes
+        r_funcs = [
+            (n, d) for n, d in result.graph.nodes(data=True)
+            if d.get("language") == "r" and d.get("kind") == "function"
+        ]
+        r_names = {d.get("label", n) for n, d in r_funcs}
+        assert "mean_val" in r_names
+        assert "sd_val" in r_names
 
     def test_pipeline_builds_relationships(self, tmp_path):
         src = _create_mini_project(tmp_path)

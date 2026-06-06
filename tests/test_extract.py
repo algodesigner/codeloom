@@ -150,3 +150,67 @@ class TestExtractFallback:
         result = extract_file("main.go", "go", "package main\n")
         assert len(result.nodes) == 1
         assert result.nodes[0].kind == "module"
+
+
+class TestExtractR:
+    def test_extracts_function_definition(self):
+        code = "add_numbers <- function(a, b) {\n  a + b\n}\n"
+        result = extract_file("math.R", "r", code)
+        names = {n.name for n in result.nodes}
+        assert "add_numbers" in names
+
+    def test_extracts_multiple_functions(self):
+        code = (
+            "mean_val <- function(x) mean(x, na.rm = TRUE)\n"
+            "sd_val <- function(x) sd(x, na.rm = TRUE)\n"
+        )
+        result = extract_file("stats.R", "r", code)
+        names = {n.name for n in result.nodes}
+        assert "mean_val" in names
+        assert "sd_val" in names
+
+    def test_extracts_r6_class(self):
+        code = (
+            'Person <- R6Class("Person",\n'
+            "  public = list(\n"
+            '    name = NULL,\n'
+            "    initialize = function(name) {\n"
+            "      self$name <- name\n"
+            "    }\n"
+            "  )\n"
+            ")\n"
+        )
+        result = extract_file("person.R", "r", code)
+        names = {n.name for n in result.nodes}
+        assert "Person" in names
+
+    def test_extracts_imports(self):
+        code = "library(dplyr)\nrequire(ggplot2)\n"
+        result = extract_file("analysis.R", "r", code)
+        targets = [e.target for e in result.edges if e.relation == "imports"]
+        assert any("dplyr" in t for t in targets)
+        assert any("ggplot2" in t for t in targets)
+
+    def test_module_node_created(self):
+        result = extract_file("helper.R", "r", "x <- 1\n")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1
+        assert modules[0].name == "helper"
+
+    def test_empty_file_returns_module_node(self):
+        result = extract_file("empty.R", "r", "")
+        assert len(result.nodes) == 1
+        assert result.nodes[0].kind == "module"
+
+    def test_function_signature_captured(self):
+        code = "normalize <- function(x, mean = 0, sd = 1) {\n}\n"
+        result = extract_file("norm.R", "r", code)
+        funcs = [n for n in result.nodes if n.kind == "function"]
+        assert len(funcs) == 1
+        assert "(x, mean = 0, sd = 1)" in funcs[0].signature
+
+    def test_defines_edges_for_functions(self):
+        code = "my_func <- function() {}\n"
+        result = extract_file("test.R", "r", code)
+        defines = [e for e in result.edges if e.relation == "defines"]
+        assert len(defines) >= 1

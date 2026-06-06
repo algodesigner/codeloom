@@ -1273,10 +1273,99 @@ def _extract_odp(file_path: str, content: str) -> ExtractionResult:
     return result
 
 
+# ---------------------------------------------------------------------------
+# R regex extractor
+# ---------------------------------------------------------------------------
+
+_R_FUNC = re.compile(
+    r"^(\w+)\s*(?:<-|=|<<-)\s*function\s*\(([^)]*)\)",
+    re.MULTILINE,
+)
+_R_LIBRARY = re.compile(
+    r"^(?:library|require)\((\w+)\)",
+    re.MULTILINE,
+)
+_R_R6CLASS = re.compile(
+    r"(\w+)\s*(?:<-|=)\s*R6Class\s*\(\s*[\"'](\w+)[\"']",
+    re.MULTILINE,
+)
+_R_SETCLASS = re.compile(
+    r"setClass\(\s*[\"'](\w+)[\"']",
+    re.MULTILINE,
+)
+_R_SETMETHOD = re.compile(
+    r"set(Method|Generic)\(\s*[\"'](\w+)[\"']",
+    re.MULTILINE,
+)
+
+
+def _extract_r(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="r",
+        )
+    )
+
+    # Extract R6 classes
+    for m in _R_R6CLASS.finditer(content):
+        name = m.group(2) or m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "class", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="class",
+                file_path=file_path,
+                language="r",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 80),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    # Extract functions
+    for m in _R_FUNC.finditer(content):
+        name = m.group(1)
+        sig = m.group(2) or ""
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "function", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="function",
+                file_path=file_path,
+                language="r",
+                start_line=line,
+                signature=f"({sig})",
+                source_snippet=_extract_snippet(content, line, line + 50),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    # Extract imports
+    for m in _R_LIBRARY.finditer(content):
+        pkg = m.group(1)
+        target_id = f"*::module::{pkg}"
+        result.edges.append(
+            ExtractedEdge(module_id, target_id, "imports")
+        )
+
+    return result
+
+
 _EXTRACTORS: dict[str, Any] = {
     "python": _extract_python,
     "javascript": _extract_javascript,
     "typescript": _extract_javascript,  # Close enough for regex fallback
+    "r": _extract_r,
     "markdown": _extract_markdown,
     "pdf": _extract_pdf,
     "html": _extract_html,

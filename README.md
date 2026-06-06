@@ -106,14 +106,14 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ## Languages & Formats
 
-### Structural extraction (functions, classes, calls, imports, via tree-sitter)
+### Structural extraction (functions, classes, calls, imports)
 
 | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | C | C# | C++ | Elixir | Go | Java |
 | JavaScript | Kotlin | Lua | Objective-C | PHP | Python |
-| Ruby | Rust | Scala | Shell | Swift | Terraform/HCL |
-| TypeScript | | | | | |
+| R | Ruby | Rust | Scala | Shell | Swift |
+| Terraform/HCL | TypeScript | | | | |
 
 ### Document & config extraction
 
