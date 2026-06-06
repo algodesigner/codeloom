@@ -165,7 +165,7 @@ The OpenCode plugin hooks into grep/glob calls, runs `codeloom search` with the 
 Stop/SessionEnd hooks detect changed files via `git diff` and trigger an incremental rebuild. Lock files prevent concurrent rebuilds. Zero manual intervention, the graph stays fresh after every session.
 
 ### Incremental & Fast
-SHA-256 content hashing skips unchanged files. Hot-start PageRank reuses previous importance scores. Typical incremental build: **~0.4s for no changes, ~4s for changes**, 95%+ faster than a full rebuild.
+SHA-256 content hashing skips unchanged files. Hot-start PageRank reuses previous importance scores. **Parallel extraction** (ProcessPoolExecutor) speeds up full builds by 24-64%. Typical incremental build: **~0.4s for no changes, ~4s for changes**, 95%+ faster than a full rebuild. **Model warmup** (`--warmup`, default on) preloads embedding models on MCP server start so the first search is fast — disable with `--no-warmup` to save ~150MB RAM.
 
 ### 100% Local + MIT
 No cloud services, no API keys, no telemetry. SQLite + FAISS for storage, sentence-transformers for embeddings. All data stays on your machine. MIT licence, no commercial restrictions, no licensing friction.
@@ -174,7 +174,10 @@ No cloud services, no API keys, no telemetry. SQLite + FAISS for storage, senten
 
 ## Performance
 
-Benchmarks on codeloom's own codebase (~3,500 lines, 90 files, 1,300 nodes):
+Benchmarks on a 2023 MacBook Pro (M2 Pro, 32GB RAM). All builds use
+parallel extraction (default: `os.cpu_count()` workers).
+
+### codeloom's own codebase (~3,500 lines, 90 files, 1,300 nodes)
 
 | Operation | Time |
 |-----------|------|
@@ -185,6 +188,20 @@ Benchmarks on codeloom's own codebase (~3,500 lines, 90 files, 1,300 nodes):
 | Cold search (`--fast`) | ~0.2s |
 | Warm search | ~0.08s |
 | Cached search | <1ms |
+
+### Synthetic stress tests (no embeddings)
+
+| Dataset | Files | Nodes | Build Time | Peak Memory |
+|---------|-------|-------|-----------|-------------|
+| Tiny | 10 | 119 | **0.7s** | 14 MB |
+| Small | 100 | 4,109 | **2.3s** | 16 MB |
+| Medium | 1,000 | 101,009 | **53.1s** | 393 MB |
+| Large | 5,000 | 205,009 | **164.9s** | 814 MB |
+
+Parallel extraction delivers 24-64% faster builds. Compact node storage
+(path interning, skipped empty attrs, RAM-free source snippets after
+persist) reduces peak memory by 10-22%. See `docs/SCALING.md` for
+detailed analysis.
 
 - **Embedding models**: ~180MB, downloaded once to `~/.codeloom/models/`
 - **Database**: ~2MB (SQLite + FTS5 + FAISS indices)

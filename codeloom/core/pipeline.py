@@ -9,7 +9,9 @@ import gc
 import hashlib
 import json
 import logging
+import os
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -76,6 +78,7 @@ def run_pipeline(
     incremental: bool = False,
     lang: str = "auto",
     git: bool = False,
+    max_workers: int | None = None,
 ) -> PipelineResult:
     """Execute the full code graph construction pipeline.
 
@@ -176,21 +179,40 @@ def run_pipeline(
     new_hashes: dict[str, str] = {}
     skipped_count = 0
 
-
+    # Phase 1 (sequential): hash check + filter unchanged
+    to_extract: list[tuple[str, str]] = []
     for f in result.detect_result.files:
-        try:
-            fpath = str(f.path)
-            if incremental:
-                fhash = _file_hash(f.path)
-                new_hashes[fpath] = fhash
-                if prev_hashes.get(fpath) == fhash:
-                    skipped_count += 1
-                    continue
+        fpath = str(f.path)
+        if incremental:
+            fhash = _file_hash(f.path)
+            new_hashes[fpath] = fhash
+            if prev_hashes.get(fpath) == fhash:
+                skipped_count += 1
+                continue
+        to_extract.append((fpath, f.language))
 
-            ext = extract_file(fpath, f.language)
-            result.extractions.append(ext)
-        except Exception as e:
-            _progress("extract", f"Error in {f.path}: {e}")
+    # Phase 2 (parallel): extract changed files
+    if to_extract:
+        n_workers = max_workers if max_workers is not None else max(
+            1, os.cpu_count() or 1
+        )
+        _progress(
+            "extract",
+            f"Extracting {len(to_extract)} files "
+            f"({n_workers} workers)"
+        )
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            fut_map = {
+                executor.submit(extract_file, fpath, lang): (fpath, lang)
+                for fpath, lang in to_extract
+            }
+            for future in as_completed(fut_map):
+                fpath, lang = fut_map[future]
+                try:
+                    ext = future.result()
+                    result.extractions.append(ext)
+                except Exception as e:
+                    _progress("extract", f"Error in {fpath}: {e}")
 
     if incremental and skipped_count > 0:
         _progress(
@@ -443,6 +465,11 @@ def run_pipeline(
     _start_stage("store")
     _progress("store", "Saving to database")
     store.save_graph(result.graph)
+    # Free source_snippet from in-memory graph nodes — it is persisted
+    # in SQLite for FTS5 and wastes ~2KB per node in RAM. Any future
+    # load_graph() from SQLite will restore it.
+    for _, data in result.graph.nodes(data=True):
+        data.pop("source_snippet", None)
     store.save_communities(result.cluster_result.communities)
     store.set_meta("source_dir", str(source_dir))
     store.set_meta("model_name", model_name or "dual:bge-small+e5-small")

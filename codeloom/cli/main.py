@@ -1686,7 +1686,17 @@ def doctor(deep: bool = False, auto_fix: bool = False):
 
 
 @cli.command()
-def mcp():
+@click.option(
+    "--warmup/--no-warmup",
+    "warmup",
+    default=True,
+    help=(
+        "Preload embedding models on startup so the first search is fast."
+        " Disable with --no-warmup to save ~150MB RAM if you only use"
+        " keyword search or impact/dependencies tools."
+    ),
+)
+def mcp(warmup: bool = True):
     """Start the codeloom MCP server (stdio transport).
 
     Exposes code graph tools to AI agents via the Model Context Protocol.
@@ -1720,7 +1730,7 @@ def mcp():
     """
     from codeloom.mcp_server import main as mcp_main
 
-    mcp_main()
+    mcp_main(warmup=warmup)
 
 
 if __name__ == "__main__":

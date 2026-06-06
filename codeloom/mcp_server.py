@@ -1193,12 +1193,18 @@ def export_subgraph(
 
 @mcp.tool()
 @_safe_tool
-def build(directory: str = ".", incremental: bool = True) -> str:
+def build(
+    directory: str = ".",
+    incremental: bool = True,
+    max_workers: int | None = None,
+) -> str:
     """Build or rebuild the code graph from source code.
 
     Args:
         directory: Directory to analyze (default: current directory).
         incremental: If true, only re-process changed files (default: true).
+        max_workers: Number of parallel extraction workers
+            (default: os.cpu_count()).
     """
     from codeloom.core.pipeline import run_pipeline
     from codeloom.storage.store import KnowledgeStore
@@ -1230,7 +1236,9 @@ def build(directory: str = ".", incremental: bool = True) -> str:
         except Exception:
             pass
 
-    result = run_pipeline(str(target), incremental=incremental)
+    result = run_pipeline(
+        str(target), incremental=incremental, max_workers=max_workers
+    )
 
     nodes = getattr(result, "node_count", 0) or (
         result.graph.number_of_nodes()
@@ -1267,8 +1275,40 @@ def build(directory: str = ".", incremental: bool = True) -> str:
 # ---------------------------------------------------------------------------
 
 
-def main():
-    """Run the MCP server with stdio transport."""
+def _warmup_models() -> None:
+    """Preload embedding models in a background thread.
+
+    The models are cached in the module-level `_models` dict inside
+    embeddings.py, so the first search call skips the ~2-5s load time.
+    """
+    import threading
+
+    def _load():
+        try:
+            from codeloom.query.embeddings import (
+                CODE_MODEL,
+                TEXT_MODEL,
+                _get_model,
+            )
+
+            _get_model(CODE_MODEL)
+            _get_model(TEXT_MODEL)
+            logger.info("Embedding models preloaded (warmup)")
+        except Exception:
+            logger.debug("Model warmup failed (will load on first use)")
+
+    threading.Thread(target=_load, daemon=True).start()
+
+
+def main(warmup: bool = True):
+    """Run the MCP server with stdio transport.
+
+    Args:
+        warmup: If True, preload embedding models in a background thread
+            so the first search call is fast.
+    """
+    if warmup:
+        _warmup_models()
     mcp.run(transport="stdio")
 
 

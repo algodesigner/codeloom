@@ -22,6 +22,9 @@ def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
     2. Inter-file: resolve wildcard references (*::name) across files
     3. Semantic: (handled later by embeddings module)
 
+    Uses path interning to reduce per-node memory for redundant file_path
+    strings, and skips empty default attributes to save dict slots.
+
     Args:
         extractions: List of per-file extraction results.
 
@@ -32,24 +35,37 @@ def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
     name_index: dict[str, list[str]] = defaultdict(list)  # name -> [node_ids]
     wildcard_edges: list[ExtractedEdge] = []
 
+    # Path interning pool — same file_path shared across all nodes
+    _path_pool: dict[str, str] = {}
+
+    def _intern(p: str) -> str:
+        if p not in _path_pool:
+            _path_pool[p] = p
+        return _path_pool[p]
+
     # Phase 1: Add all nodes
     for ext in extractions:
         for node in ext.nodes:
             if G.has_node(node.id):
                 continue
-            G.add_node(
-                node.id,
-                label=node.name,
-                kind=node.kind,
-                file_path=node.file_path,
-                language=node.language,
-                start_line=node.start_line,
-                end_line=node.end_line,
-                docstring=node.docstring,
-                signature=node.signature,
-                source_snippet=node.source_snippet,
-                decorators=node.decorators,
-            )
+            attrs = {
+                "label": node.name,
+                "kind": node.kind,
+                "file_path": _intern(node.file_path),
+                "language": node.language,
+                "start_line": node.start_line,
+                "end_line": node.end_line,
+            }
+            # Skip empty defaults to save ~200 bytes/node of dict slots
+            if node.docstring:
+                attrs["docstring"] = node.docstring
+            if node.signature:
+                attrs["signature"] = node.signature
+            if node.decorators:
+                attrs["decorators"] = node.decorators
+            if node.source_snippet:
+                attrs["source_snippet"] = node.source_snippet
+            G.add_node(node.id, **attrs)
             name_index[node.name].append(node.id)
 
     # Phase 2: Add edges, collecting wildcards for resolution
