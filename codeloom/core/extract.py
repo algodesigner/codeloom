@@ -1718,6 +1718,119 @@ def _extract_dockerfile(file_path: str, content: str) -> ExtractionResult:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Assembly regex extractor
+# ---------------------------------------------------------------------------
+
+_ASM_LABEL = re.compile(r"^(\w+):\s*(?:;|//|#|$)", re.MULTILINE)
+_ASM_INCLUDE = re.compile(
+    r"^(?:[%.])?\s*include\s+[\"<]?([^\">]+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_ASM_MACRO = re.compile(
+    r"^(?:[%.])?\s*macro\s+(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_ASM_PROC = re.compile(
+    r"^(\w+)\s+proc",
+    re.MULTILINE | re.IGNORECASE,
+)
+_ASM_GLOBAL = re.compile(
+    r"^(?:\.)?\s*(?:globl|global|extern)\s+(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _extract_assembly(file_path: str, content: str) -> ExtractionResult:
+    result = ExtractionResult()
+    module_id = _make_node_id(file_path, Path(file_path).stem, "module")
+    result.nodes.append(
+        ExtractedNode(
+            id=module_id,
+            name=Path(file_path).stem,
+            kind="module",
+            file_path=file_path,
+            language="assembly",
+        )
+    )
+
+    for m in _ASM_INCLUDE.finditer(content):
+        target = m.group(1).strip()
+        target_id = f"*::{target}"
+        result.edges.append(
+            ExtractedEdge(module_id, target_id, "imports")
+        )
+
+    for m in _ASM_GLOBAL.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "variable", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="variable",
+                file_path=file_path,
+                language="assembly",
+                start_line=line,
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _ASM_MACRO.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "macro", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="macro",
+                file_path=file_path,
+                language="assembly",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 10),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _ASM_PROC.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "function", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="function",
+                file_path=file_path,
+                language="assembly",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 20),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    for m in _ASM_LABEL.finditer(content):
+        name = m.group(1)
+        line = content[: m.start()].count("\n") + 1
+        node_id = _make_node_id(file_path, name, "function", start_line=line)
+        result.nodes.append(
+            ExtractedNode(
+                id=node_id,
+                name=name,
+                kind="function",
+                file_path=file_path,
+                language="assembly",
+                start_line=line,
+                source_snippet=_extract_snippet(content, line, line + 20),
+            )
+        )
+        result.edges.append(ExtractedEdge(module_id, node_id, "defines"))
+
+    return result
+
+
 _EXTRACTORS: dict[str, Any] = {
     "python": _extract_python,
     "javascript": _extract_javascript,
@@ -1742,6 +1855,7 @@ _EXTRACTORS: dict[str, Any] = {
     "odt": _extract_odt,
     "ods": _extract_ods,
     "odp": _extract_odp,
+    "assembly": _extract_assembly,
 }
 
 

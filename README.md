@@ -108,7 +108,7 @@ All tools are available via MCP (stdin/stdout), no HTTP server, no network, no c
 
 ### Structural extraction (functions, classes, calls, imports)
 
-Full tree-sitter tags.scm-based resolution for 17+ core languages. All 55 languages get module-level indexing, source snippets, and embeddings — structural detail depends on optional `tree-sitter-<lang>` packages.
+Full tree-sitter tags.scm-based resolution for 17+ core languages. All 56 languages get module-level indexing, source snippets, and embeddings — structural detail depends on optional `tree-sitter-<lang>` packages.
 
 | | | | | | | | |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -116,6 +116,7 @@ Full tree-sitter tags.scm-based resolution for 17+ core languages. All 55 langua
 | Groovy | Haskell | Java | JavaScript | Julia | Kotlin | Lua | Nix |
 | Objective-C | OCaml | Perl | PHP | PowerShell | Python | R | Ruby |
 | Rust | Scala | Shell | Solidity | Swift | Terraform | TypeScript | Zig |
+| Assembly | | | | | | | |
 
 ### Document & config extraction
 

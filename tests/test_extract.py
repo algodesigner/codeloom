@@ -329,9 +329,94 @@ class TestExtractDockerfile:
         assert len(modules) == 1
 
 
-class TestExtractDjvu:
-    def test_creates_document_node_without_content(self):
-        result = extract_file("test.djvu", "djvu", "")
-        doc_nodes = [n for n in result.nodes if n.kind == "document"]
-        assert len(doc_nodes) == 1
-        assert doc_nodes[0].name == "test"
+class TestExtractAssembly:
+    def test_extracts_module_node(self):
+        result = extract_file("test.asm", "assembly", "")
+        modules = [n for n in result.nodes if n.kind == "module"]
+        assert len(modules) == 1
+        assert modules[0].name == "test"
+
+    def test_extracts_labels_as_functions(self):
+        content = (
+            "start:\n"
+            "    mov ax, 1\n"
+            "\n"
+            "loop:\n"
+            "    dec cx\n"
+            "    jnz loop\n"
+        )
+        result = extract_file("test.asm", "assembly", content)
+        funcs = [n for n in result.nodes if n.kind == "function" and n.name != "module"]
+        names = {n.name for n in funcs}
+        assert "start" in names
+        assert "loop" in names
+
+    def test_extracts_includes(self):
+        content = (
+            '%include "macros.inc"\n'
+            ".include \"utils.asm\"\n"
+            "include \"defs.inc\"\n"
+        )
+        result = extract_file("test.asm", "assembly", content)
+        imports = [e for e in result.edges if e.relation == "imports"]
+        assert len(imports) >= 1
+
+    def test_extracts_macros(self):
+        content = (
+            "%macro print 1\n"
+            "    mov ah, 0x09\n"
+            "    int 0x21\n"
+            "%endmacro\n"
+            ".macro debug\n"
+            "    nop\n"
+            ".endm\n"
+        )
+        result = extract_file("test.asm", "assembly", content)
+        macros = [n for n in result.nodes if n.kind == "macro"]
+        names = {n.name for n in macros}
+        assert "print" in names
+        assert "debug" in names
+
+    def test_extracts_procs(self):
+        content = (
+            "main PROC\n"
+            "    mov ax, 1\n"
+            "    ret\n"
+            "main ENDP\n"
+        )
+        result = extract_file("test.asm", "assembly", content)
+        procs = [n for n in result.nodes if n.kind == "function" and n.name != "module"]
+        assert any("main" in n.name for n in procs)
+
+    def test_extracts_globals(self):
+        content = (
+            ".globl _start\n"
+            ".global main\n"
+            "extern printf\n"
+        )
+        result = extract_file("test.asm", "assembly", content)
+        vars = [n for n in result.nodes if n.kind == "variable"]
+        names = {n.name for n in vars}
+        assert "_start" in names
+        assert "main" in names
+        assert "printf" in names
+
+    def test_z80_labels(self):
+        content = (
+            "org 0x8000\n"
+            "\n"
+            "start:\n"
+            "    ld a, 0\n"
+            "    ld hl, message\n"
+            "    call print_str\n"
+            "\n"
+            "print_str:\n"
+            "    ld a, (hl)\n"
+            "    cp 0\n"
+            "    ret z\n"
+        )
+        result = extract_file("test.z80", "assembly", content)
+        funcs = [n for n in result.nodes if n.kind == "function" and n.name != "module"]
+        names = {n.name for n in funcs}
+        assert "start" in names
+        assert "print_str" in names

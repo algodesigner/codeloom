@@ -21,6 +21,7 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "go": [".go"],
     "rust": [".rs"],
     "ada": [".ada", ".ads", ".adb"],
+    "assembly": [".asm", ".s", ".S", ".gen", ".z80"],
     "c": [".c", ".h"],
     "cpp": [".cpp", ".hpp", ".cc", ".cxx"],
     "ruby": [".rb"],
