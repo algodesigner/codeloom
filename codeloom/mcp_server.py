@@ -198,17 +198,24 @@ def _reload():
 def _resolve_node(node_id: str, G) -> list[str]:
     """Resolve a node ID with fuzzy matching.
 
-    Tries exact match first, then partial match on ID and label.
+    Tries exact match first, then partial match on label, then
+    partial match on full ID (file path). Label matches take
+    priority so a function named 'run' beats a coincidental
+    'run' substring in /home/runner/... paths.
     Returns list of matching node IDs (empty if none found).
     """
     if node_id in G:
         return [node_id]
     q = node_id.lower()
-    return [
-        n
-        for n in G.nodes
-        if q in n.lower() or q in G.nodes[n].get("label", "").lower()
+    label_matches = [
+        n for n in G.nodes
+        if q in G.nodes[n].get("label", "").lower()
     ]
+    id_matches = [
+        n for n in G.nodes
+        if q in n.lower()
+    ]
+    return label_matches + [n for n in id_matches if n not in label_matches]
 
 
 def _node_label(G, node_id: str) -> str:
