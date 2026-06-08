@@ -63,10 +63,10 @@ codeloom search "database" --json
 ## 6. OpenCode integration
 
 ```bash
-codeloom opencode install --scope project
-codeloom opencode install --scope user
-codeloom opencode uninstall --scope project
-codeloom opencode uninstall --scope user
+codeloom install opencode --scope project
+codeloom install opencode --scope user
+codeloom uninstall opencode --scope project
+codeloom uninstall opencode --scope user
 ```
 
 - [ ] `--scope project` creates `.opencode/skills/codeloom/SKILL.md`
@@ -80,8 +80,8 @@ codeloom opencode uninstall --scope user
 ## 7. Claude Code integration
 
 ```bash
-codeloom claude install --scope project
-codeloom claude uninstall --scope project
+codeloom install claude --scope project
+codeloom uninstall claude --scope project
 ```
 
 - [ ] `--scope project` creates `.claude/skills/codeloom/SKILL.md`
@@ -91,12 +91,12 @@ codeloom claude uninstall --scope project
 ## 8. Other integrations (spot-check)
 
 ```bash
-codeloom codex install
-codeloom gemini install
-codeloom cursor install
-codeloom windsurf install
-codeloom cline install
-codeloom aider install
+codeloom install codex
+codeloom install gemini
+codeloom install cursor
+codeloom install windsurf
+codeloom install cline
+codeloom install aider
 ```
 
 - [ ] Each install completes without errors

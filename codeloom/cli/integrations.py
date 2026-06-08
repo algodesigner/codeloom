@@ -5,8 +5,6 @@ from __future__ import annotations
 import json as _json
 from pathlib import Path
 
-import click
-
 from ._helpers import (
     auto_rebuild_command,
     human_choose,
@@ -263,20 +261,6 @@ def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
 # ─── Claude Code ─────────────────────────────────────────────────────────────
 
 
-@click.group(name="claude")
-def claude_group():
-    """Manage Claude Code integration (skill + CLAUDE.md + hooks)."""
-    pass
-
-
-@claude_group.command(name="install")
-@click.option(
-    "--scope",
-    type=click.Choice(["user", "project"], case_sensitive=False),
-    default=None,
-    help="Install scope: 'user' (global) or 'project' (local).",
-)
-@click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 def claude_install(scope: str | None, force: bool = False):
     """Install Claude Code integration."""
     project_root = Path.cwd()
@@ -398,13 +382,6 @@ def claude_install(scope: str | None, force: bool = False):
     human_done("Done! Run 'codeloom build .' to create your first code graph.")
 
 
-@claude_group.command(name="uninstall")
-@click.option(
-    "--scope",
-    type=click.Choice(["user", "project", "all"], case_sensitive=False),
-    default="all",
-    help="Uninstall scope: 'user', 'project', or 'all' (default).",
-)
 def claude_uninstall(scope: str):
     """Remove Claude Code integration."""
     import shutil
@@ -453,13 +430,6 @@ def claude_uninstall(scope: str):
 # ─── Codex CLI ───────────────────────────────────────────────────────────────
 
 
-@click.group(name="codex")
-def codex_group():
-    """Manage per-project OpenAI Codex CLI integration."""
-    pass
-
-
-@codex_group.command(name="install")
 def codex_install():
     """Install per-project Codex CLI integration (AGENTS.md + hooks.json)."""
     human_header("Installing codeloom for Codex CLI...")
@@ -515,7 +485,6 @@ def codex_install():
     human_done()
 
 
-@codex_group.command(name="uninstall")
 def codex_uninstall():
     """Remove per-project Codex CLI integration."""
     human_header("Removing codeloom from Codex CLI")
@@ -551,13 +520,6 @@ def codex_uninstall():
 # ─── Gemini CLI ──────────────────────────────────────────────────────────────
 
 
-@click.group(name="gemini")
-def gemini_group():
-    """Manage per-project Google Gemini CLI integration."""
-    pass
-
-
-@gemini_group.command(name="install")
 def gemini_install():
     """Install per-project Gemini CLI integration (GEMINI.md + hooks)."""
     human_header("Installing codeloom for Gemini CLI...")
@@ -612,7 +574,6 @@ def gemini_install():
     human_done()
 
 
-@gemini_group.command(name="uninstall")
 def gemini_uninstall():
     """Remove per-project Gemini CLI integration."""
     human_header("Removing codeloom from Gemini CLI")
@@ -648,13 +609,6 @@ def gemini_uninstall():
 # ─── Cursor IDE ──────────────────────────────────────────────────────────────
 
 
-@click.group(name="cursor")
-def cursor_group():
-    """Manage per-project Cursor IDE integration."""
-    pass
-
-
-@cursor_group.command(name="install")
 def cursor_install():
     """Install per-project Cursor integration (.cursor/rules/codeloom.mdc)."""
     human_header("Installing codeloom for Cursor IDE...")
@@ -680,7 +634,6 @@ def cursor_install():
     human_done()
 
 
-@cursor_group.command(name="uninstall")
 def cursor_uninstall():
     """Remove per-project Cursor integration."""
     human_header("Removing codeloom from Cursor IDE")
@@ -699,13 +652,6 @@ def cursor_uninstall():
 # ─── Windsurf IDE ────────────────────────────────────────────────────────────
 
 
-@click.group(name="windsurf")
-def windsurf_group():
-    """Manage per-project Windsurf IDE integration."""
-    pass
-
-
-@windsurf_group.command(name="install")
 def windsurf_install():
     """Install per-project Windsurf integration
     (.windsurf/rules/codeloom.md)."""
@@ -720,7 +666,6 @@ def windsurf_install():
     human_done()
 
 
-@windsurf_group.command(name="uninstall")
 def windsurf_uninstall():
     """Remove per-project Windsurf integration."""
     human_header("Removing codeloom from Windsurf IDE")
@@ -734,13 +679,6 @@ def windsurf_uninstall():
 # ─── Cline ───────────────────────────────────────────────────────────────────
 
 
-@click.group(name="cline")
-def cline_group():
-    """Manage per-project Cline (VS Code extension) integration."""
-    pass
-
-
-@cline_group.command(name="install")
 def cline_install():
     """Install per-project Cline integration (.clinerules)."""
     human_header("Installing codeloom for Cline...")
@@ -751,7 +689,6 @@ def cline_install():
     human_done()
 
 
-@cline_group.command(name="uninstall")
 def cline_uninstall():
     """Remove per-project Cline integration."""
     human_header("Removing codeloom from Cline")
@@ -766,13 +703,6 @@ def cline_uninstall():
 
 
 
-@click.group(name="aider")
-def aider_group():
-    """Manage per-project Aider CLI integration."""
-    pass
-
-
-@aider_group.command(name="install")
 def aider_install():
     """Install per-project Aider integration (CONVENTIONS.md +
     .aider.conf.yml)."""
@@ -804,7 +734,6 @@ def aider_install():
     human_done()
 
 
-@aider_group.command(name="uninstall")
 def aider_uninstall():
     """Remove per-project Aider integration."""
     import yaml
@@ -839,20 +768,6 @@ def aider_uninstall():
 # ─── OpenCode ───────────────────────────────────────────────────────────
 
 
-@click.group(name="opencode")
-def opencode_group():
-    """Manage OpenCode integration (skill in .opencode/skills/)."""
-    pass
-
-
-@opencode_group.command(name="install")
-@click.option(
-    "--scope",
-    type=click.Choice(["user", "project"], case_sensitive=False),
-    default=None,
-    help="Install scope: 'user' (global) or 'project' (local).",
-)
-@click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 def opencode_install(scope: str | None, force: bool = False):
     """Install the codeloom skill for OpenCode."""
     project_root = Path.cwd()
@@ -926,13 +841,6 @@ def opencode_install(scope: str | None, force: bool = False):
     )
 
 
-@opencode_group.command(name="uninstall")
-@click.option(
-    "--scope",
-    type=click.Choice(["user", "project"], case_sensitive=False),
-    default="project",
-    help="Uninstall scope: 'user' (global) or 'project' (default).",
-)
 def opencode_uninstall(scope: str):
     """Remove OpenCode integration."""
     import shutil
@@ -1017,16 +925,4 @@ def detect_agents() -> list[str]:
     return detected
 
 
-# ─── Register all groups ─────────────────────────────────────────────────────
 
-
-def register_integration_commands(cli_group):
-    """Register all integration subcommands on the given CLI group."""
-    cli_group.add_command(claude_group)
-    cli_group.add_command(codex_group)
-    cli_group.add_command(gemini_group)
-    cli_group.add_command(cursor_group)
-    cli_group.add_command(windsurf_group)
-    cli_group.add_command(cline_group)
-    cli_group.add_command(aider_group)
-    cli_group.add_command(opencode_group)

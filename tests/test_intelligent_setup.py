@@ -16,7 +16,7 @@ def test_intelligent_detection_cursor(tmp_path):
 
         # We need to mock shutil.which and detect_agents to ensure isolation
         with patch("shutil.which", return_value=None):
-            result = runner.invoke(cli, ["setup"], input="n\n")
+            result = runner.invoke(cli, ["install"], input="n\n")
 
             # Use lowercase for case-insensitive check
             output = result.output.lower()
@@ -31,8 +31,8 @@ def test_unified_uninstall_footprint_scan(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
         # 1. Setup multiple
-        runner.invoke(cli, ["setup", "claude"], input="project\n")
-        runner.invoke(cli, ["setup", "cursor"])
+        runner.invoke(cli, ["install", "claude"], input="project\n")
+        runner.invoke(cli, ["install", "cursor"])
 
         # 2. Run uninstall, confirm all
         result = runner.invoke(cli, ["uninstall"], input="y\n")
@@ -54,7 +54,7 @@ def test_setup_unexpected_argument_fix(tmp_path):
         # Mock detect_agents to return empty list to trigger manual selection
         with patch("codeloom.cli.integrations.detect_agents", return_value=[]):
             # Pick 'aider' from the list
-            result = runner.invoke(cli, ["setup"], input="project\naider\n")
+            result = runner.invoke(cli, ["install"], input="project\naider\n")
 
             assert result.exit_code == 0
             assert "Error: Got unexpected extra argument" not in result.output
@@ -65,12 +65,12 @@ def test_opencode_agents_md_sync(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
         # 1. Install
-        runner.invoke(cli, ["opencode", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "opencode", "--scope", "project"])
         assert Path("AGENTS.md").exists()
         assert "codeloom" in Path("AGENTS.md").read_text()
 
         # 2. Uninstall
-        runner.invoke(cli, ["opencode", "uninstall", "--scope", "project"])
+        runner.invoke(cli, ["uninstall", "opencode", "--scope", "project"])
         # Should be deleted if it only had codeloom content
         assert not Path("AGENTS.md").exists()
 
@@ -82,29 +82,24 @@ def test_surgical_uninstall_integrity(tmp_path):
         Path("CLAUDE.md").write_text(notes)
 
         # 1. Setup
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
 
         # 2. Uninstall
-        runner.invoke(cli, ["claude", "uninstall", "--scope", "project"])
+        runner.invoke(cli, ["uninstall", "claude", "--scope", "project"])
 
         # 3. Verify notes are back to original
         assert Path("CLAUDE.md").read_text().strip() == notes.strip()
 
 def test_command_group_uniqueness():
-    """Programmatically verify that command groups are not duplicated."""
-    # This checks for the NameError/duplication issue
+    """Verify that unified install/uninstall commands exist and accept agents."""
     from codeloom.cli.main import cli
     commands = list(cli.commands.keys())
-    # The registration happens at module load time,
-    # so we check the actual click object
-    assert "cline" in commands
-    assert "aider" in commands
-    assert "opencode" in commands
-
-    # Check if groups have correct subcommands
-    cline_group = cli.commands["cline"]
-    assert "install" in cline_group.commands
-    assert "uninstall" in cline_group.commands
+    assert "install" in commands
+    assert "uninstall" in commands
+    # Per-platform groups should NOT exist as separate commands
+    assert "cline" not in commands
+    assert "aider" not in commands
+    assert "opencode" not in commands
 
 def test_json_merge_safety(tmp_path):
     """Verify JSON configuration remains valid and uncorrupted."""
@@ -115,12 +110,12 @@ def test_json_merge_safety(tmp_path):
 
         # 1. Create invalid JSON
         settings_file.write_text("{ invalid json }")
-        result = runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        result = runner.invoke(cli, ["install", "claude", "--scope", "project"])
         assert "Could not parse" in result.output
 
         # 2. Valid JSON with existing content
         settings_file.write_text('{"existing": true}')
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
 
         data = json.loads(settings_file.read_text())
         assert data["existing"] is True

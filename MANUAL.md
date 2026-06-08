@@ -427,7 +427,7 @@ Only re-extracts files that changed (detected via SHA-256 content hashing). Unch
 When integrated with Claude Code, Codex, or Gemini, codeloom registers Stop/SessionEnd hooks. When your coding session ends, the hook detects changed files via `git diff` and triggers an incremental rebuild in the background. A lock file prevents concurrent rebuilds.
 
 ```bash
-codeloom claude install --scope project
+codeloom install claude --scope project
 ```
 
 ### Auto-rebuild via git hooks (planned)
@@ -457,14 +457,14 @@ codeloom node "Auth"     # Find a specific node and see its edges
 codeloom integrates with 9 AI coding agents in one command each:
 
 ```bash
-codeloom opencode install          # Semantic Workbench / OpenCode
-codeloom claude install            # Claude Code (Anthropic)
-codeloom codex install             # OpenAI Codex CLI
-codeloom gemini install            # Google Gemini CLI
-codeloom cursor install            # Cursor IDE
-codeloom windsurf install          # Windsurf IDE
-codeloom cline install             # Cline VS Code extension
-codeloom aider install             # Aider CLI
+codeloom install opencode          # Semantic Workbench / OpenCode
+codeloom install claude            # Claude Code (Anthropic)
+codeloom install codex             # OpenAI Codex CLI
+codeloom install gemini            # Google Gemini CLI
+codeloom install cursor            # Cursor IDE
+codeloom install windsurf          # Windsurf IDE
+codeloom install cline             # Cline VS Code extension
+codeloom install aider             # Aider CLI
 ```
 
 Each `install` does:
@@ -533,14 +533,8 @@ Agents are instructed to **always search before grepping** — one search call c
 | `doctor` | 21-point installation health check |
 | `query` | Interactive search REPL |
 | `mcp` | Start MCP server (stdio transport) |
-| `claude install\|uninstall` | Manage Claude Code integration |
-| `opencode install\|uninstall` | Manage OpenCode integration |
-| `codex install\|uninstall` | Manage Codex CLI integration |
-| `gemini install\|uninstall` | Manage Gemini CLI integration |
-| `cursor install\|uninstall` | Manage Cursor IDE integration |
-| `windsurf install\|uninstall` | Manage Windsurf IDE integration |
-| `cline install\|uninstall` | Manage Cline integration |
-| `aider install\|uninstall` | Manage Aider CLI integration |
+| `install [agent]` | Install codeloom integration for AI agents |
+| `uninstall [agent]` | Remove codeloom integration for AI agents |
 
 ### Common options
 

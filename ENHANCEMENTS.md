@@ -26,7 +26,7 @@ Planned improvements for codeloom, based on audit and analysis of the original h
 
 - [x] **Added tests for integrations**: 20 tests covering Claude, Codex, Gemini, Cursor, Windsurf, and Aider — all following the same CliRunner pattern as the existing Cline tests.
 - [x] **Added tests for embeddings**: 25 tests covering model config, node text construction, search term extraction, query encoding, streaming embeddings, node filtering, and store round-trip.
-- [x] **Auto-register MCP config**: `codeloom opencode install` now writes the MCP config to `opencode.json` (project) or `~/.config/opencode/config.json` (user) automatically. Falls back to printing instructions on error.
+- [x] **Auto-register MCP config**: `codeloom install opencode` now writes the MCP config to `opencode.json` (project) or `~/.config/opencode/config.json` (user) automatically. Falls back to printing instructions on error.
 - [ ] ~~**Tests for multi-language extraction**:~~ Skipped — tree-sitter parsers required. JS/TS already have dedicated tests.
 - [ ] ~~**Incremental build embed test**:~~ Skipped — requires full pipeline with sentencetransformers. The `embed_nodes_streaming` skip_ids parameter is tested individually.
 

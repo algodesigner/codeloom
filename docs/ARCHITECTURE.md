@@ -344,7 +344,7 @@ codeloom integrates with AI coding agents through three mechanisms:
 
 ### 1. Skill Files (`SKILL.md`)
 
-A markdown file with YAML frontmatter that agents read to understand how to use codeloom. Installed via `codeloom <agent> install` to the agent's skill/rules directory.
+A markdown file with YAML frontmatter that agents read to understand how to use codeloom. Installed via `codeloom install <agent>` to the agent's skill/rules directory.
 
 Supported agents: Claude Code, OpenCode, Cursor, Windsurf, Cline, Aider, Codex CLI, Gemini CLI.
 

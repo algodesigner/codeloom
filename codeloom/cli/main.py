@@ -22,7 +22,6 @@ from ._helpers import (
     resolve_db,
     suppress_library_logs,
 )
-from .integrations import register_integration_commands
 
 
 @click.group()
@@ -36,7 +35,7 @@ def cli(ctx):
     suppress_library_logs()
 
 
-@cli.command()
+@cli.command(name="install")
 @click.argument("platform", required=False)
 @click.option(
     "--scope",
@@ -46,11 +45,11 @@ def cli(ctx):
 )
 @click.option("--force", is_flag=True, help="Overwrite manual skill edits.")
 @click.pass_context
-def setup(ctx, platform: str | None, scope: str | None, force: bool):
+def install(ctx, platform: str | None, scope: str | None, force: bool):
     """Unified setup for AI agent integrations.
 
     With no arguments, it intelligently detects present agents and
-    configures them. Use 'codeloom setup <platform>' to pinpoint a specific
+    configures them. Use 'codeloom install <agent>' to target a specific
     agent (e.g., claude, cursor, aider).
     """
     from ._helpers import (
@@ -128,8 +127,17 @@ def setup(ctx, platform: str | None, scope: str | None, force: bool):
 
 @cli.command()
 @click.argument("platform", required=False)
+@click.option(
+    "--scope",
+    type=click.Choice(["user", "project", "all"], case_sensitive=False),
+    default=None,
+    help=(
+        "Uninstall scope: 'user', 'project', or 'all'."
+        " Defaults differ by agent."
+    ),
+)
 @click.pass_context
-def uninstall(ctx, platform: str | None):
+def uninstall(ctx, platform: str | None, scope: str | None):
     """Unified removal of AI agent integrations.
 
     With no arguments, it scans for codeloom footprints and removes
@@ -184,9 +192,10 @@ def uninstall(ctx, platform: str | None):
     for agent in to_remove:
         uninstaller = agent_registry[agent]
         if agent in ("claude", "opencode"):
-            # Uninstall scope default is usually 'all' or 'project'
-            scope = "all" if agent == "claude" else "project"
-            ctx.invoke(uninstaller, scope=scope)
+            effective_scope = scope or (
+                "all" if agent == "claude" else "project"
+            )
+            ctx.invoke(uninstaller, scope=effective_scope)
         else:
             ctx.invoke(uninstaller)
 
@@ -1271,7 +1280,7 @@ def show_node(ctx, node_id: str, db: str | None, source_dir: str):
     store.close()
 
 
-register_integration_commands(cli)
+
 
 
 def _repair_indexes(conn, cwd, ok, warn, fail):
@@ -1731,6 +1740,140 @@ def mcp(warmup: bool = True):
     from codeloom.mcp_server import main as mcp_main
 
     mcp_main(warmup=warmup)
+
+
+# ─── Help command ──────────────────────────────────────────────────────────
+
+HELP_CATEGORIES: list[tuple[str, list[str]]] = [
+    ("CORE", ["build", "watch", "search", "stats", "node"]),
+    ("SEARCH SIGNALS", [
+        "search-keyword", "search-vector", "search-graph", "search-community",
+    ]),
+    ("INSPECT", ["export", "visualize", "communities", "doctor"]),
+    ("MANAGEMENT", ["install", "uninstall", "clean", "mcp"]),
+    ("OTHER", ["query", "help"]),
+]
+
+HELP_EXAMPLES: dict[str, list[tuple[str, str]]] = {
+    "build": [
+        ("Full build", "codeloom build ."),
+        ("Incremental update", "codeloom build . --incremental"),
+        ("Use git accelerator", "codeloom build /path --git"),
+    ],
+    "watch": [
+        ("Watch directory", "codeloom watch ."),
+    ],
+    "search": [
+        ("Hybrid search", 'codeloom search "database connection pool"'),
+        ("Fast mode (text only)", 'codeloom search "auth" --fast'),
+        (
+            "Filter by symbol kind",
+            'codeloom search "error handling" --kind function',
+        ),
+        (
+            "Filter by file glob",
+            'codeloom search "StripeClient" --file "src/payments/*"',
+        ),
+    ],
+    "search-keyword": [
+        ("Fast exact-name lookup", 'codeloom search-keyword "StripeClient"'),
+    ],
+    "search-vector": [
+        ("Semantic similarity", 'codeloom search-vector "payment processing"'),
+    ],
+    "search-graph": [
+        ("Graph expansion from seeds", 'codeloom search-graph "auth"'),
+    ],
+    "search-community": [
+        ("Community cluster match", 'codeloom search-community "database"'),
+    ],
+    "stats": [
+        ("Graph overview", "codeloom stats"),
+    ],
+    "node": [
+        ("Node details (fuzzy match)", "codeloom node StripeClient"),
+    ],
+    "query": [
+        ("Interactive REPL", "codeloom query"),
+    ],
+    "export": [
+        ("Export as JSON", "codeloom export --format json"),
+        ("Export as D3.js", "codeloom export --format d3"),
+        ("Export as GraphML", "codeloom export --format graphml"),
+    ],
+    "visualize": [
+        ("Interactive HTML viz", "codeloom visualize"),
+        ("With max nodes limit", "codeloom visualize --max-nodes 200"),
+    ],
+    "communities": [
+        ("List all communities", "codeloom communities"),
+        ("Search communities", 'codeloom communities --search "database"'),
+    ],
+    "doctor": [
+        ("Quick health check", "codeloom doctor"),
+        ("Deep integrity check", "codeloom doctor --deep"),
+        ("Auto-repair issues", "codeloom doctor --fix"),
+    ],
+    "install": [
+        ("Auto-detect and install", "codeloom install"),
+        ("Install specific agent", "codeloom install claude"),
+        ("Install with scope", "codeloom install claude --scope project"),
+    ],
+    "uninstall": [
+        ("Auto-detect and remove", "codeloom uninstall"),
+        ("Remove specific agent", "codeloom uninstall cursor"),
+    ],
+    "clean": [
+        ("Remove database", "codeloom clean"),
+        ("Remove with confirmation skip", "codeloom clean --yes"),
+    ],
+    "mcp": [
+        ("Start MCP server", "codeloom mcp"),
+        ("Skip model warmup", "codeloom mcp --no-warmup"),
+    ],
+    "help": [
+        ("This overview", "codeloom help"),
+        ("Command-specific help", "codeloom help build"),
+    ],
+}
+
+
+@cli.command(name="help")
+@click.argument("command_name", required=False)
+@click.pass_context
+def help_cmd(ctx, command_name: str | None):
+    """Show categorised help with usage examples.
+
+    With no arguments, lists all commands grouped by category.
+    With a command name, shows detailed help + examples.
+    """
+    if command_name:
+        if command_name not in cli.commands:
+            human_fail(f"Unknown command: {command_name}")
+            return
+        cmd = cli.commands[command_name]
+        click.echo(f"\n{cmd.name} — {cmd.help or cmd.short_help or ''}\n")
+        with click.Context(command=cmd, parent=ctx.parent) as sub_ctx:
+            sub_ctx.info_name = cmd.name
+            click.echo(cmd.get_help(sub_ctx))
+        examples = HELP_EXAMPLES.get(command_name)
+        if examples:
+            click.echo("Examples:")
+            for desc, example in examples:
+                click.echo(f"  {example}")
+                click.echo(f"    {desc}")
+        return
+
+    click.echo("\ncodeloom help — command reference\n")
+    for category, cmds in HELP_CATEGORIES:
+        click.echo(f"{category}:")
+        for cmd_name in cmds:
+            cmd = cli.commands.get(cmd_name)
+            if cmd:
+                short = (cmd.help or cmd.short_help or "").split(".")[0]
+                click.echo(f"  {cmd_name:<20} {short}")
+        click.echo()
+    click.echo("For details: codeloom help <command>")
 
 
 if __name__ == "__main__":

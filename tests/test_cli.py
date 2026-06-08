@@ -740,7 +740,7 @@ class TestClineIntegration:
     def test_cline_install_creates_rules(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["cline", "install"])
+            result = runner.invoke(cli, ["install", "cline"])
             assert result.exit_code == 0
             rules = Path(".clinerules")
             assert rules.exists()
@@ -751,8 +751,8 @@ class TestClineIntegration:
     def test_cline_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["cline", "install"])
-            result = runner.invoke(cli, ["cline", "install"])
+            runner.invoke(cli, ["install", "cline"])
+            result = runner.invoke(cli, ["install", "cline"])
             assert result.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
             assert "up-to-date" in result.output.lower()
@@ -761,7 +761,7 @@ class TestClineIntegration:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path(".clinerules").write_text("# Existing rules\nDo stuff.\n")
-            result = runner.invoke(cli, ["cline", "install"])
+            result = runner.invoke(cli, ["install", "cline"])
             assert result.exit_code == 0
             content = Path(".clinerules").read_text()
             assert "Existing rules" in content
@@ -770,14 +770,14 @@ class TestClineIntegration:
     def test_cline_uninstall(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["cline", "install"])
-            result = runner.invoke(cli, ["cline", "uninstall"])
+            runner.invoke(cli, ["install", "cline"])
+            result = runner.invoke(cli, ["uninstall", "cline"])
             assert result.exit_code == 0
 
     def test_cline_uninstall_no_file(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["cline", "uninstall"])
+            result = runner.invoke(cli, ["uninstall", "cline"])
             assert result.exit_code == 0
             assert "not found" in result.output.lower()
 
@@ -788,7 +788,7 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             assert result.exit_code == 0
             skill_file = Path(".opencode/skills/codeloom/SKILL.md")
@@ -800,7 +800,7 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "user"],
+                ["install", "opencode", "--scope", "user"],
             )
             assert result.exit_code == 0
             home = Path.home()
@@ -824,11 +824,11 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result1 = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             result2 = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             assert result1.exit_code == 0
             assert result2.exit_code == 0
@@ -839,11 +839,11 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             result = runner.invoke(
                 cli,
-                ["opencode", "uninstall", "--scope", "project"],
+                ["uninstall", "opencode", "--scope", "project"],
             )
             assert result.exit_code == 0
             skill_dir = Path(".opencode/skills/codeloom")
@@ -854,7 +854,7 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["opencode", "uninstall", "--scope", "project"],
+                ["uninstall", "opencode", "--scope", "project"],
             )
             assert result.exit_code == 0
             assert "not found" in result.output.lower()
@@ -864,7 +864,7 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             assert result.exit_code == 0
             config_file = Path("opencode.json")
@@ -879,7 +879,7 @@ class TestOpenCodeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "user"],
+                ["install", "opencode", "--scope", "user"],
             )
             assert result.exit_code == 0
             config_file = Path.home() / ".config" / "opencode" / "config.json"
@@ -899,7 +899,7 @@ class TestOpenCodeIntegration:
             Path("opencode.json").write_text(json.dumps(existing))
             result = runner.invoke(
                 cli,
-                ["opencode", "install", "--scope", "project"],
+                ["install", "opencode", "--scope", "project"],
             )
             assert result.exit_code == 0
             config = json.loads(Path("opencode.json").read_text())
@@ -914,7 +914,7 @@ class TestClaudeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["claude", "install", "--scope", "project"],
+                ["install", "claude", "--scope", "project"],
             )
             assert result.exit_code == 0
             skill_file = Path(".claude/skills/codeloom/SKILL.md")
@@ -926,7 +926,7 @@ class TestClaudeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 cli,
-                ["claude", "install", "--scope", "project"],
+                ["install", "claude", "--scope", "project"],
             )
             assert result.exit_code == 0
             claude_md = Path("CLAUDE.md")
@@ -936,8 +936,8 @@ class TestClaudeIntegration:
     def test_claude_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["claude", "install", "--scope", "project"])
-            r2 = runner.invoke(cli, ["claude", "install", "--scope", "project"])
+            r1 = runner.invoke(cli, ["install", "claude", "--scope", "project"])
+            r2 = runner.invoke(cli, ["install", "claude", "--scope", "project"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -948,11 +948,11 @@ class TestClaudeIntegration:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             runner.invoke(
                 cli,
-                ["claude", "install", "--scope", "project"],
+                ["install", "claude", "--scope", "project"],
             )
             result = runner.invoke(
                 cli,
-                ["claude", "uninstall", "--scope", "project"],
+                ["uninstall", "claude", "--scope", "project"],
             )
             assert result.exit_code == 0
             assert not Path(".claude/skills/codeloom").exists()
@@ -962,7 +962,7 @@ class TestCodexIntegration:
     def test_codex_install_creates_agents_md(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["codex", "install"])
+            result = runner.invoke(cli, ["install", "codex"])
             assert result.exit_code == 0
             agents_md = Path("AGENTS.md")
             assert agents_md.exists()
@@ -971,7 +971,7 @@ class TestCodexIntegration:
     def test_codex_install_creates_hooks(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["codex", "install"])
+            result = runner.invoke(cli, ["install", "codex"])
             assert result.exit_code == 0
             hooks_file = Path(".codex/hooks.json")
             assert hooks_file.exists()
@@ -981,8 +981,8 @@ class TestCodexIntegration:
     def test_codex_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["codex", "install"])
-            r2 = runner.invoke(cli, ["codex", "install"])
+            r1 = runner.invoke(cli, ["install", "codex"])
+            r2 = runner.invoke(cli, ["install", "codex"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -991,8 +991,8 @@ class TestCodexIntegration:
     def test_codex_uninstall(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["codex", "install"])
-            result = runner.invoke(cli, ["codex", "uninstall"])
+            runner.invoke(cli, ["install", "codex"])
+            result = runner.invoke(cli, ["uninstall", "codex"])
             assert result.exit_code == 0
             agents_md = Path("AGENTS.md")
             assert (
@@ -1005,7 +1005,7 @@ class TestGeminiIntegration:
     def test_gemini_install_creates_gemini_md(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["gemini", "install"])
+            result = runner.invoke(cli, ["install", "gemini"])
             assert result.exit_code == 0
             gemini_md = Path("GEMINI.md")
             assert gemini_md.exists()
@@ -1014,7 +1014,7 @@ class TestGeminiIntegration:
     def test_gemini_install_creates_settings(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["gemini", "install"])
+            result = runner.invoke(cli, ["install", "gemini"])
             assert result.exit_code == 0
             settings_file = Path(".gemini/settings.json")
             assert settings_file.exists()
@@ -1024,8 +1024,8 @@ class TestGeminiIntegration:
     def test_gemini_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["gemini", "install"])
-            r2 = runner.invoke(cli, ["gemini", "install"])
+            r1 = runner.invoke(cli, ["install", "gemini"])
+            r2 = runner.invoke(cli, ["install", "gemini"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -1036,7 +1036,7 @@ class TestCursorIntegration:
     def test_cursor_install_creates_rules(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["cursor", "install"])
+            result = runner.invoke(cli, ["install", "cursor"])
             assert result.exit_code == 0
             rules_file = Path(".cursor/rules/codeloom.mdc")
             assert rules_file.exists()
@@ -1045,8 +1045,8 @@ class TestCursorIntegration:
     def test_cursor_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["cursor", "install"])
-            r2 = runner.invoke(cli, ["cursor", "install"])
+            r1 = runner.invoke(cli, ["install", "cursor"])
+            r2 = runner.invoke(cli, ["install", "cursor"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -1055,8 +1055,8 @@ class TestCursorIntegration:
     def test_cursor_uninstall(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["cursor", "install"])
-            result = runner.invoke(cli, ["cursor", "uninstall"])
+            runner.invoke(cli, ["install", "cursor"])
+            result = runner.invoke(cli, ["uninstall", "cursor"])
             assert result.exit_code == 0
             assert not Path(".cursor/rules/codeloom.mdc").exists()
 
@@ -1065,7 +1065,7 @@ class TestWindsurfIntegration:
     def test_windsurf_install_creates_rules(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["windsurf", "install"])
+            result = runner.invoke(cli, ["install", "windsurf"])
             assert result.exit_code == 0
             rules_file = Path(".windsurf/rules/codeloom.md")
             assert rules_file.exists()
@@ -1074,8 +1074,8 @@ class TestWindsurfIntegration:
     def test_windsurf_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["windsurf", "install"])
-            r2 = runner.invoke(cli, ["windsurf", "install"])
+            r1 = runner.invoke(cli, ["install", "windsurf"])
+            r2 = runner.invoke(cli, ["install", "windsurf"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -1084,8 +1084,8 @@ class TestWindsurfIntegration:
     def test_windsurf_uninstall(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["windsurf", "install"])
-            result = runner.invoke(cli, ["windsurf", "uninstall"])
+            runner.invoke(cli, ["install", "windsurf"])
+            result = runner.invoke(cli, ["uninstall", "windsurf"])
             assert result.exit_code == 0
             assert not Path(".windsurf/rules/codeloom.md").exists()
 
@@ -1094,7 +1094,7 @@ class TestAiderIntegration:
     def test_aider_install_creates_conventions(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["aider", "install"])
+            result = runner.invoke(cli, ["install", "aider"])
             assert result.exit_code == 0
             conventions = Path("CONVENTIONS.md")
             assert conventions.exists()
@@ -1103,8 +1103,8 @@ class TestAiderIntegration:
     def test_aider_install_idempotent(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            r1 = runner.invoke(cli, ["aider", "install"])
-            r2 = runner.invoke(cli, ["aider", "install"])
+            r1 = runner.invoke(cli, ["install", "aider"])
+            r2 = runner.invoke(cli, ["install", "aider"])
             assert r1.exit_code == 0
             assert r2.exit_code == 0
             # Smart update logic: second run sees it's up-to-date
@@ -1113,8 +1113,8 @@ class TestAiderIntegration:
     def test_aider_uninstall(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["aider", "install"])
-            result = runner.invoke(cli, ["aider", "uninstall"])
+            runner.invoke(cli, ["install", "aider"])
+            result = runner.invoke(cli, ["uninstall", "aider"])
             assert result.exit_code == 0
             conventions = Path("CONVENTIONS.md")
             assert (

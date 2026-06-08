@@ -29,8 +29,8 @@ AI coding agents are powerful but fundamentally blind to your codebase structure
 pip install codeloom
 
 cd your-project/
-codeloom opencode install    # for OpenCode
-# or: codeloom claude install  # for Claude Code
+codeloom install opencode    # for OpenCode
+# or: codeloom install claude  # for Claude Code
 ```
 
 Then tell your agent:
@@ -136,17 +136,17 @@ One command per platform:
 
 | Agent | Install |
 |-------|---------|
-| **Claude Code** | `codeloom claude install` |
-| **OpenCode** | `codeloom opencode install` |
-| **Codex CLI** | `codeloom codex install` |
-| **Gemini CLI** | `codeloom gemini install` |
-| **Cursor IDE** | `codeloom cursor install` |
-| **Windsurf IDE** | `codeloom windsurf install` |
-| **Cline** | `codeloom cline install` |
-| **Aider CLI** | `codeloom aider install` |
+| **Claude Code** | `codeloom install claude` |
+| **OpenCode** | `codeloom install opencode` |
+| **Codex CLI** | `codeloom install codex` |
+| **Gemini CLI** | `codeloom install gemini` |
+| **Cursor IDE** | `codeloom install cursor` |
+| **Windsurf IDE** | `codeloom install windsurf` |
+| **Cline** | `codeloom install cline` |
+| **Aider CLI** | `codeloom install aider` |
 | **Any MCP client** | `claude mcp add codeloom -- codeloom mcp` |
 
-Each `install` writes context rules and registers hooks where supported. For OpenCode, it also installs a plugin that **automatically injects graph context before grep/glob calls**, your agent gets results without having to ask. Remove with `codeloom <platform> uninstall`.
+Each `install` writes context rules and registers hooks where supported. For OpenCode, it also installs a plugin that **automatically injects graph context before grep/glob calls**, your agent gets results without having to ask. Remove with `codeloom uninstall <agent>`.
 
 ---
 
@@ -229,12 +229,12 @@ All commands output compact text by default (designed for AI agent consumption).
 | `query` | Interactive search REPL |
 | `export` | Export as JSON, GraphML, or D3.js |
 | `visualize` | Interactive HTML visualization |
-| `setup [platform]` | One-step setup for all detected agents |
-| `uninstall [platform]` | Remove integration for a given platform |
+| `install [agent]` | Install codeloom integration for AI agents |
+| `uninstall [agent]` | Remove codeloom integration for AI agents |
 | `doctor` | Check installation health |
 | `clean` | Remove `.codeloom/` database |
 | `mcp` | Start MCP server |
-| `<platform> install\|uninstall` | Manage agent integration |
+| `help [command]` | Show categorised help with usage examples |
 
 ### MCP-Only Tools
 

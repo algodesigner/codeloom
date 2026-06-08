@@ -22,7 +22,7 @@ def test_surgical_update(tmp_path):
         )
         Path("CLAUDE.md").write_text(initial_content)
 
-        result = runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        result = runner.invoke(cli, ["install", "claude", "--scope", "project"])
         assert result.exit_code == 0
 
         updated_content = Path("CLAUDE.md").read_text()
@@ -45,7 +45,7 @@ def test_positional_enforcement(tmp_path):
         )
         Path("CLAUDE.md").write_text(initial_content)
 
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
 
         content = Path("CLAUDE.md").read_text()
         assert content.startswith("<!-- codeloom-start -->")
@@ -58,7 +58,7 @@ def test_legacy_support(tmp_path):
         initial_content = "## codeloom\nLegacy unmarked rules."
         Path("CLAUDE.md").write_text(initial_content)
 
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
 
         content = Path("CLAUDE.md").read_text()
         assert content.startswith("<!-- codeloom-start -->")
@@ -81,8 +81,8 @@ def test_json_merge_idempotency(tmp_path):
         settings_file.write_text(json.dumps(existing))
 
         # Run twice
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
 
         data = json.loads(settings_file.read_text())
         hooks = data["hooks"]["PreToolUse"]
@@ -97,18 +97,18 @@ def test_skill_safety(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
         # 1. Install official version
-        runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        runner.invoke(cli, ["install", "claude", "--scope", "project"])
         skill_file = Path(".claude/skills/codeloom/SKILL.md")
 
         # 2. Manually edit it
         skill_file.write_text("User edit")
 
         # 3. Try to update without force
-        result = runner.invoke(cli, ["claude", "install", "--scope", "project"])
+        result = runner.invoke(cli, ["install", "claude", "--scope", "project"])
         assert "manual edits" in result.output
         assert skill_file.read_text() == "User edit"
 
         # 4. Update with force
-        result = runner.invoke(cli, ["claude", "install", "--scope", "project", "--force"])
+        result = runner.invoke(cli, ["install", "claude", "--scope", "project", "--force"])
         assert "Force-updated skill" in result.output
         assert "User edit" not in skill_file.read_text()
