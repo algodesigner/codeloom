@@ -69,7 +69,7 @@ Seeds tell you *where* relevant code lives. Edges tell you *how it connects*. To
 
 ---
 
-## 15 MCP Tools at a Glance
+## 16 MCP Tools at a Glance
 
 Three categories, one MCP server.
 
@@ -99,6 +99,7 @@ Three categories, one MCP server.
 | `export_subgraph` | Export focused subgraph around a symbol as D3.js JSON |
 | `list_repos` | List available code graphs with staleness status |
 | `build` | Build or rebuild the code graph |
+| `watch` | Watch files for changes and rebuild automatically |
 
 All tools are available via MCP (stdin/stdout), no HTTP server, no network, no configuration.
 

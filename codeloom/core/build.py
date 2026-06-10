@@ -8,10 +8,16 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import PurePosixPath
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
 from codeloom.core.extract import ExtractedEdge, ExtractionResult
+
+if TYPE_CHECKING:
+    import igraph
+
+    from codeloom.storage.store import KnowledgeStore
 
 
 def build_graph(extractions: list[ExtractionResult]) -> nx.DiGraph:
@@ -294,20 +300,36 @@ _CONFIDENCE_SCORES: dict[str, float] = {
 def compute_edge_weights(
     G: nx.DiGraph,
     embeddings: dict[str, list[float]] | None = None,
+    store: KnowledgeStore | None = None,
 ) -> None:
     """Compute composite edge weights combining multiple signals.
 
     weight = 0.4 * semantic + 0.3 * confidence
             + 0.2 * proximity + 0.1 * bidirectional
 
+    Accepts both NetworkX DiGraph and igraph Graph.
+    When given an igraph graph, embeddings are loaded lazily from
+    *store* (a KnowledgeStore) instead of an in-memory dict.
+
     Args:
-        G: The code graph (modified in-place).
-        embeddings: Optional node_id -> embedding vector mapping for
-            semantic similarity.
+        G: The code graph (modified in-place). NetworkX or igraph.
+        embeddings: Node_id -> embedding vector mapping for
+            semantic similarity (NetworkX path only).
+        store: KnowledgeStore for lazy embedding loading (igraph path).
     """
+    if hasattr(G, 'vs'):
+        _compute_edge_weights_igraph(G, store)
+        return
+    _compute_edge_weights_nx(G, embeddings)
+
+
+def _compute_edge_weights_nx(
+    G: nx.DiGraph,
+    embeddings: dict[str, list[float]] | None = None,
+) -> None:
+    """NetworkX implementation of edge weight computation."""
     import numpy as np
 
-    # Precompute: which edges are bidirectional
     bidir_pairs: set[tuple[str, str]] = set()
     for u, v in G.edges():
         if G.has_edge(v, u):
@@ -315,7 +337,6 @@ def compute_edge_weights(
             bidir_pairs.add((v, u))
 
     for u, v, data in G.edges(data=True):
-        # 1. Semantic similarity (cosine) — 0.0 if no embeddings
         semantic = 0.0
         if embeddings and u in embeddings and v in embeddings:
             vec_u = np.array(embeddings[u], dtype=np.float32)
@@ -324,15 +345,13 @@ def compute_edge_weights(
             norm_v = np.linalg.norm(vec_v)
             if norm_u > 0 and norm_v > 0:
                 semantic = float(np.dot(vec_u, vec_v) / (norm_u * norm_v))
-                semantic = max(0.0, semantic)  # clamp negative
+                semantic = max(0.0, semantic)
 
-        # 2. Confidence score
         confidence = _CONFIDENCE_SCORES.get(
             data.get("confidence", "EXTRACTED"),
             0.5,
         )
 
-        # 3. Proximity score (based on file paths)
         u_path = G.nodes[u].get("file_path", "") if G.has_node(u) else ""
         v_path = G.nodes[v].get("file_path", "") if G.has_node(v) else ""
         if u_path and v_path and u_path == v_path:
@@ -344,15 +363,98 @@ def compute_edge_weights(
         else:
             proximity = 0.4
 
-        # 4. Bidirectional bonus
         bidir = 1.0 if (u, v) in bidir_pairs else 0.0
-
-        # Composite weight
         weight = (
             0.4 * semantic + 0.3 * confidence + 0.2 * proximity + 0.1 * bidir
         )
         data["weight"] = round(weight, 4)
         data["semantic_similarity"] = round(semantic, 4)
+
+
+def _compute_edge_weights_igraph(
+    G: "igraph.Graph",
+    store: "KnowledgeStore | None" = None,
+) -> None:
+    """igraph implementation of edge weight computation.
+
+    Loads embeddings lazily from *store* using batched SQL queries
+    instead of keeping all vectors in memory.
+    """
+    import numpy as np
+
+    node_names = G.vs["name"]
+
+    # Precompute bidirectionality
+    bidir_pairs: set[tuple[int, int]] = set()
+    for e in G.es:
+        if G.get_eid(e.target, e.source, directed=True, error=False) != -1:
+            bidir_pairs.add((e.source, e.target))
+            bidir_pairs.add((e.target, e.source))
+
+    # Load embeddings in batches from store
+    emb_cache: dict[str, np.ndarray] = {}
+    _EMB_BATCH = 500
+
+    def _get_emb(
+        u_name: str, v_name: str
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        missing = [n for n in (u_name, v_name) if n not in emb_cache]
+        if missing and store is not None:
+            for i in range(0, len(missing), _EMB_BATCH):
+                batch = missing[i:i + _EMB_BATCH]
+                placeholders = ",".join("?" for _ in batch)
+                rows = store.conn.execute(
+                    "SELECT node_id, vector FROM embeddings "
+                    f"WHERE node_id IN ({placeholders})",
+                    batch,
+                ).fetchall()
+                for row in rows:
+                    emb_cache[row["node_id"]] = np.frombuffer(
+                        row["vector"], dtype=np.float32
+                    )
+        if u_name in emb_cache and v_name in emb_cache:
+            return emb_cache[u_name], emb_cache[v_name]
+        return None
+
+    for i, e in enumerate(G.es):
+        u_idx = e.source
+        v_idx = e.target
+        u_name = node_names[u_idx]
+        v_name = node_names[v_idx]
+        edge_data = G.es[i]
+
+        semantic = 0.0
+        pair = _get_emb(u_name, v_name)
+        if pair is not None:
+            vec_u, vec_v = pair
+            norm_u = np.linalg.norm(vec_u)
+            norm_v = np.linalg.norm(vec_v)
+            if norm_u > 0 and norm_v > 0:
+                semantic = float(np.dot(vec_u, vec_v) / (norm_u * norm_v))
+                semantic = max(0.0, semantic)
+
+        confidence = _CONFIDENCE_SCORES.get(
+            edge_data.attributes().get("confidence", "EXTRACTED"),
+            0.5,
+        )
+
+        u_path = G.vs[u_idx].attributes().get("file_path", "")
+        v_path = G.vs[v_idx].attributes().get("file_path", "")
+        if u_path and v_path and u_path == v_path:
+            proximity = 1.0
+        elif u_path and v_path:
+            u_dir = str(PurePosixPath(u_path).parent)
+            v_dir = str(PurePosixPath(v_path).parent)
+            proximity = 0.7 if u_dir == v_dir else 0.4
+        else:
+            proximity = 0.4
+
+        bidir = 1.0 if (u_idx, v_idx) in bidir_pairs else 0.0
+        weight = (
+            0.4 * semantic + 0.3 * confidence + 0.2 * proximity + 0.1 * bidir
+        )
+        edge_data["weight"] = round(weight, 4)
+        edge_data["semantic_similarity"] = round(semantic, 4)
 
 
 def compute_pagerank(
@@ -362,18 +464,30 @@ def compute_pagerank(
 ) -> dict[str, float]:
     """Compute PageRank importance scores for all nodes.
 
+    Accepts both NetworkX DiGraph and igraph Graph.
+
     Args:
-        G: The code graph.
-        personalization: Optional per-node bias (e.g., recency weighting).
-        initial_scores: Optional hot-start scores for faster convergence.
+        G: The code graph. NetworkX or igraph.
+        personalization: Optional per-node bias (ignored for igraph).
+        initial_scores: Optional hot-start scores (ignored for igraph).
 
     Returns:
         Dict mapping node_id to importance score.
     """
+    if hasattr(G, 'vs'):
+        return _compute_pagerank_igraph(G)
+    return _compute_pagerank_nx(G, personalization, initial_scores)
+
+
+def _compute_pagerank_nx(
+    G: nx.DiGraph,
+    personalization: dict[str, float] | None = None,
+    initial_scores: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """NetworkX PageRank implementation."""
     if len(G) == 0:
         return {}
 
-    # Filter initial scores to only include nodes present in the current graph
     nstart = None
     if initial_scores:
         nstart = {n: s for n, s in initial_scores.items() if n in G}
@@ -391,8 +505,37 @@ def compute_pagerank(
         return {n: 1.0 / len(G) for n in G}
 
 
+def _compute_pagerank_igraph(G: "igraph.Graph") -> dict[str, float]:
+    """igraph PageRank implementation.
+
+    Hot-start is not supported by igraph so incremental builds may
+    converge slightly slower; results are equally correct.
+    """
+    if G.vcount() == 0:
+        return {}
+    try:
+        scores = G.pagerank(directed=True, niter=200)
+        return dict(zip(G.vs["name"], scores))
+    except Exception:
+        n = G.vcount()
+        return {G.vs[i]["name"]: 1.0 / n for i in range(n)}
+
+
 def graph_stats(G: nx.DiGraph) -> dict:
-    """Compute basic graph statistics."""
+    """Compute basic graph statistics.
+
+    Accepts both NetworkX DiGraph and igraph Graph.
+    """
+    if hasattr(G, 'vs'):
+        n = G.vcount()
+        e = G.ecount()
+        density = (2.0 * e) / max(n * (n - 1), 1)
+        wcc = len(G.components(mode="weak"))
+        isolates = sum(1 for v in G.vs if G.degree(v) == 0)
+        return {
+            "nodes": n, "edges": e, "density": round(density, 6),
+            "components": wcc, "isolates": isolates,
+        }
     return {
         "nodes": G.number_of_nodes(),
         "edges": G.number_of_edges(),

@@ -666,19 +666,25 @@ def _build_seed_subtree(
     undirected = G.to_undirected(as_view=True)
     seed_set = set(seed_ids)
 
-    # Step 1: Compute shortest distance and paths between seed pairs
+    # Step 1: Compute shortest paths between seed pairs.
+    # Uses single-source shortest path with a cutoff to avoid
+    # traversing the entire graph for unreachable pairs. On a 242k-node
+    # graph this is ~30 BFS calls (one per seed) instead of 435 all-pairs,
+    # each bounded by max_path_length hops.
     pair_paths: dict[tuple[int, int], list[str]] = {}
     valid_seeds = [s for s in seed_ids if undirected.has_node(s)]
 
     for i, src in enumerate(valid_seeds):
+        try:
+            paths = nx.single_source_shortest_path(
+                undirected, src, cutoff=max_path_length
+            )
+        except nx.NetworkXNoPath:
+            continue
         for j in range(i + 1, len(valid_seeds)):
             tgt = valid_seeds[j]
-            try:
-                path = nx.shortest_path(undirected, src, tgt)
-            except nx.NetworkXNoPath:
-                continue
-            if len(path) <= max_path_length:
-                pair_paths[(i, j)] = path
+            if tgt in paths:
+                pair_paths[(i, j)] = paths[tgt]
 
     if not pair_paths:
         # No connectable pairs -> all seeds isolated
@@ -773,6 +779,10 @@ def _expand_from_seeds(
     scored: dict[str, float] = {}
     visited: set[str] = set(seed_ids)
     current_frontier: list[str] = seed_ids
+    # Cap the BFS frontier per hop to prevent explosion on high-fanout
+    # nodes (e.g. a module with thousands of methods). The cap is divided
+    # evenly among frontier nodes so diverse regions are still explored.
+    _MAX_FRONTIER = 200
 
     for hop in range(1, hops + 1):
         weight = 1.0 / hop
@@ -789,6 +799,10 @@ def _expand_from_seeds(
                         continue
                     scored[neighbor] = scored.get(neighbor, 0) + weight
                     next_frontier.append(neighbor)
+                if len(next_frontier) >= _MAX_FRONTIER:
+                    break
+            if len(next_frontier) >= _MAX_FRONTIER:
+                break
         current_frontier = next_frontier
         if not current_frontier:
             break

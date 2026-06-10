@@ -51,7 +51,9 @@ def _safe_tool(func):
             return func(*args, **kwargs)
         except FileNotFoundError as e:
             return str(e)
-        except Exception as e:
+        except BaseException as e:
+            if isinstance(e, (SystemExit, KeyboardInterrupt)):
+                raise
             logger.error(
                 "Tool %s failed: %s\n%s",
                 func.__name__,
@@ -149,9 +151,8 @@ def _store_path() -> Path:
 def _reload():
     """Force reload after a build."""
     global _store, _graph
-    with _reload_lock:
-        _store = None
-        _graph = None
+    _store = None
+    _graph = None
     return _load()
 
 
@@ -165,29 +166,23 @@ def _load():
             return _store, _graph
         from codeloom.storage.store import KnowledgeStore
 
-    db = _get_db_path()
-    if not Path(db).exists():
-        parent_list = [Path.cwd(), *list(Path.cwd().parents)[:3]]
-        cwd_parents = "/".join(p.name for p in parent_list)
-        raise FileNotFoundError(
-            f"Code graph not found at {db}. "
-            f"Run 'codeloom build <dir>' first. "
-            f"Searched from cwd ({Path.cwd()}) and parents ({cwd_parents}). "
-            f"Tip: set CODELOOM_DB env var to point to your knowledge.db."
-        )
-    _store = KnowledgeStore(db)
-    _graph = _store.load_graph()
-    n, e = _graph.number_of_nodes(), _graph.number_of_edges()
-    logger.info("Loaded graph: %d nodes, %d edges", n, e)
+        db = _get_db_path()
+        if not Path(db).exists():
+            parent_list = [Path.cwd(), *list(Path.cwd().parents)[:3]]
+            cwd_parents = "/".join(p.name for p in parent_list)
+            raise FileNotFoundError(
+                f"Code graph not found at {db}. "
+                f"Run 'codeloom build <dir>' first. "
+                f"Searched from cwd ({Path.cwd()}) "
+                f"and parents ({cwd_parents})."
+                f"Tip: set CODELOOM_DB env var to point to "
+                f"your knowledge.db."
+            )
+        _store = KnowledgeStore(db)
+        _graph = _store.load_graph()
+        n, e = _graph.number_of_nodes(), _graph.number_of_edges()
+        logger.info("Loaded graph: %d nodes, %d edges", n, e)
     return _store, _graph
-
-
-def _reload():
-    """Force reload after a build."""
-    global _store, _graph
-    _store = None
-    _graph = None
-    return _load()
 
 
 # ---------------------------------------------------------------------------
@@ -1400,15 +1395,15 @@ def watch(
 # ---------------------------------------------------------------------------
 
 
-def _warmup_models() -> None:
-    """Preload embedding models in a background thread.
+def main(warmup: bool = True):
+    """Run the MCP server with stdio transport.
 
-    The models are cached in the module-level `_models` dict inside
-    embeddings.py, so the first search call skips the ~2-5s load time.
+    Args:
+        warmup: If True, preload embedding models synchronously
+            before starting the server so the first search call is fast.
+            Models are cached in ~/.codeloom/models/ after first download.
     """
-    import threading
-
-    def _load():
+    if warmup:
         try:
             from codeloom.query.embeddings import (
                 CODE_MODEL,
@@ -1418,22 +1413,11 @@ def _warmup_models() -> None:
 
             _get_model(CODE_MODEL)
             _get_model(TEXT_MODEL)
-            logger.info("Embedding models preloaded (warmup)")
+            logger.info("Embedding models preloaded")
         except Exception:
-            logger.debug("Model warmup failed (will load on first use)")
-
-    threading.Thread(target=_load, daemon=True).start()
-
-
-def main(warmup: bool = True):
-    """Run the MCP server with stdio transport.
-
-    Args:
-        warmup: If True, preload embedding models in a background thread
-            so the first search call is fast.
-    """
-    if warmup:
-        _warmup_models()
+            logger.warning(
+                "Model warmup failed. Models will load on first search call."
+            )
     mcp.run(transport="stdio")
 
 

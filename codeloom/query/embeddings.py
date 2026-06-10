@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    import igraph
     import networkx as nx
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,17 @@ _MODEL_CACHE_DIR = Path.home() / ".codeloom" / "models"
 
 # Lazy-loaded model cache (keyed by model name)
 _models: dict[str, object] = {}
+
+
+def clear_model_cache() -> None:
+    """Free all cached embedding models and run GC.
+
+    Call after the embedding pipeline completes to reclaim the ~600 MB
+    held by SentenceTransformer models. Subsequent calls to _get_model
+    will reload on demand.
+    """
+    _models.clear()
+    gc.collect()
 
 
 def _get_model(model_name: str):
@@ -245,7 +257,7 @@ def _encode_batch(
 
 
 def embed_nodes_streaming(
-    G: "nx.DiGraph",
+    G: "nx.DiGraph | igraph.Graph",
     code_model: str = CODE_MODEL,
     text_model: str | None = None,
     batch_size: int = 64,
@@ -254,9 +266,11 @@ def embed_nodes_streaming(
     """Generate embeddings in memory-bounded batches with dual-model routing.
 
     Nodes are classified as code or text based on their 'kind' attribute,
-    then embedded with the appropriate model.
+    then embedded with the appropriate model. Accepts both NetworkX and
+    igraph graphs.
 
     Args:
+        G: Code graph (NetworkX DiGraph or igraph Graph).
         text_model: Override text model (e.g. multilingual-e5-small).
         skip_ids: Node IDs to skip (already embedded).
             Used for incremental builds.
@@ -265,6 +279,24 @@ def embed_nodes_streaming(
         (node_ids_batch, vectors_batch, model_type) tuples.
         model_type is "code" or "text".
     """
+    if hasattr(G, 'vs'):
+        yield from _embed_igraph(
+            G, code_model, text_model, batch_size, skip_ids
+        )
+    else:
+        yield from _embed_nx(
+            G, code_model, text_model, batch_size, skip_ids
+        )
+
+
+def _embed_nx(
+    G: "nx.DiGraph",
+    code_model: str,
+    text_model: str | None,
+    batch_size: int,
+    skip_ids: set[str] | None,
+) -> Generator[tuple[list[str], np.ndarray, str], None, None]:
+    """NetworkX implementation of embed_nodes_streaming."""
     effective_text = text_model or TEXT_MODEL
     code_ids, code_texts = [], []
     text_ids, text_texts = [], []
@@ -273,12 +305,9 @@ def embed_nodes_streaming(
     skipped_incremental = 0
     for node_id, data in G.nodes(data=True):
         kind = data.get("kind", "")
-        # EMBED_KINDSに含まれないノードはスキップ
-        # （低情報ノードのベクター汚染防止）
         if kind.lower() not in EMBED_KINDS:
             skipped += 1
             continue
-        # Skip nodes that already have embeddings (incremental build)
         if skip_ids and node_id in skip_ids:
             skipped_incremental += 1
             continue
@@ -301,13 +330,9 @@ def embed_nodes_streaming(
     logger.debug(
         "Dual-model split: %d code nodes, %d text nodes, "
         "%d skipped, %d incremental-skip",
-        len(code_ids),
-        len(text_ids),
-        skipped,
-        skipped_incremental,
+        len(code_ids), len(text_ids), skipped, skipped_incremental,
     )
 
-    # Embed code nodes
     for i in range(0, len(code_texts), batch_size):
         batch_ids = code_ids[i : i + batch_size]
         batch_texts = code_texts[i : i + batch_size]
@@ -315,7 +340,67 @@ def embed_nodes_streaming(
         yield batch_ids, vectors, "code"
         _memory_guard()
 
-    # Embed text nodes
+    for i in range(0, len(text_texts), batch_size):
+        batch_ids = text_ids[i : i + batch_size]
+        batch_texts = text_texts[i : i + batch_size]
+        vectors = _encode_batch(effective_text, batch_texts, batch_size)
+        yield batch_ids, vectors, "text"
+        _memory_guard()
+
+
+def _embed_igraph(
+    G: "igraph.Graph",
+    code_model: str,
+    text_model: str | None,
+    batch_size: int,
+    skip_ids: set[str] | None,
+) -> Generator[tuple[list[str], np.ndarray, str], None, None]:
+    """igraph implementation of embed_nodes_streaming."""
+    effective_text = text_model or TEXT_MODEL
+    code_ids, code_texts = [], []
+    text_ids, text_texts = [], []
+
+    skipped = 0
+    skipped_incremental = 0
+    for v in G.vs:
+        attrs = v.attributes()
+        node_id = v["name"]
+        kind = attrs.get("kind", "")
+        if kind.lower() not in EMBED_KINDS:
+            skipped += 1
+            continue
+        if skip_ids and node_id in skip_ids:
+            skipped_incremental += 1
+            continue
+        text = _node_text(attrs)
+        if not text.strip():
+            continue
+        if is_code_node(kind):
+            code_ids.append(node_id)
+            code_texts.append(text)
+        else:
+            text_ids.append(node_id)
+            text_texts.append(text)
+
+    if skipped_incremental:
+        logger.info(
+            "Incremental embedding: skipped %d already-embedded nodes",
+            skipped_incremental,
+        )
+
+    logger.debug(
+        "Dual-model split: %d code nodes, %d text nodes, "
+        "%d skipped, %d incremental-skip",
+        len(code_ids), len(text_ids), skipped, skipped_incremental,
+    )
+
+    for i in range(0, len(code_texts), batch_size):
+        batch_ids = code_ids[i : i + batch_size]
+        batch_texts = code_texts[i : i + batch_size]
+        vectors = _encode_batch(code_model, batch_texts, batch_size)
+        yield batch_ids, vectors, "code"
+        _memory_guard()
+
     for i in range(0, len(text_texts), batch_size):
         batch_ids = text_ids[i : i + batch_size]
         batch_texts = text_texts[i : i + batch_size]

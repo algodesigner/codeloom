@@ -94,8 +94,6 @@ def run_pipeline(
         git: Use git deltas for incremental builds.
     """
 
-    import networkx as nx
-
     from codeloom.core.ts_extract import extract_file_ts as extract_file
 
     from .build import compute_edge_weights, compute_pagerank
@@ -228,7 +226,6 @@ def run_pipeline(
     _start_stage("build")
     _progress("build", "Building code graph")
 
-    # Collect re-extracted file paths before clearing extractions
     re_extracted_files: set[str] = set()
     for ext in result.extractions:
         for node in ext.nodes:
@@ -238,11 +235,9 @@ def run_pipeline(
     new_graph = build_graph(result.extractions)
     new_graph = merge_tier3_nodes(new_graph)
 
-    # For incremental builds, merge new extractions into existing graph
     if incremental and skipped_count > 0:
         existing = store.load_graph()
         if existing.number_of_nodes() > 0:
-            # Remove nodes from re-extracted files (they'll be replaced)
             nodes_to_remove = [
                 n
                 for n, d in existing.nodes(data=True)
@@ -250,8 +245,6 @@ def run_pipeline(
             ]
             for n in nodes_to_remove:
                 existing.remove_node(n)
-
-            # Merge: add existing (unchanged) nodes/edges, then new ones
             result.graph = nx.compose(existing, new_graph)
             del existing
         else:
@@ -270,9 +263,7 @@ def run_pipeline(
         from codeloom.core.git_cochange import enrich_graph_with_cochange
 
         cochange_count = enrich_graph_with_cochange(
-            result.graph,
-            source_dir,
-            on_progress=on_progress,
+            result.graph, source_dir, on_progress=on_progress,
         )
         if cochange_count > 0:
             _progress("git_cochange", f"Added {cochange_count} co-change edges")
@@ -291,28 +282,8 @@ def run_pipeline(
     result.edge_count = e
     _progress("build", f"Graph: {n} nodes, {e} edges")
 
-    # Stage 4: PageRank
-    _start_stage("pagerank")
-    _progress("pagerank", "Computing importance scores")
-
-    # Hot-start PageRank for incremental builds
-    initial_scores = None
-    if incremental:
-        initial_scores = {
-            n: d.get("pagerank", 0.0)
-            for n, d in result.graph.nodes(data=True)
-            if "pagerank" in d
-        }
-
-    result.pagerank = compute_pagerank(
-        result.graph, initial_scores=initial_scores
-    )
-    for node_id, score in result.pagerank.items():
-        if result.graph.has_node(node_id):
-            result.graph.nodes[node_id]["pagerank"] = score
-    _end_stage("pagerank")
-
-    # Stage 4.5: Cross-file reference resolution
+    # Stage 4: Cross-file reference resolution (must precede nx→igraph
+    # conversion because it uses NetworkX's edge mutation API)
     _start_stage("resolve")
     _progress("resolve", "Resolving cross-file references")
     try:
@@ -325,7 +296,8 @@ def run_pipeline(
             )
         elif res.unresolved > 0:
             _progress(
-                "resolve", f"{res.unresolved} references could not be resolved"
+                "resolve",
+                f"{res.unresolved} references could not be resolved",
             )
         else:
             _progress("resolve", "All references already resolved")
@@ -334,9 +306,30 @@ def run_pipeline(
         logger.debug("Reference resolution failed", exc_info=True)
     _end_stage("resolve")
 
-    # Stage 5: Embeddings (optional) — dual-model streaming
+    # --- Convert NetworkX graph to igraph for memory-efficient downstream ---
+    # igraph stores node/edge attributes in compact C arrays, using ~10x
+    # less memory than NetworkX Python dicts. This is the critical memory
+    # optimisation that prevents OOM on large codebases (200k+ nodes).
+    _progress("build", "Converting graph to compact representation")
+    _nx_to_igraph(result)
+    _end_stage("build")
+
+    # Stage 5: PageRank (on igraph)
+    _start_stage("pagerank")
+    _progress("pagerank", "Computing importance scores")
+    result.pagerank = compute_pagerank(result.graph)
+    if hasattr(result.graph, 'vs'):
+        for i, name in enumerate(result.graph.vs["name"]):
+            score = result.pagerank.get(name, 0.0)
+            result.graph.vs[i]["pagerank"] = score
+    else:
+        for node_id, score in result.pagerank.items():
+            if result.graph.has_node(node_id):
+                result.graph.nodes[node_id]["pagerank"] = score
+    _end_stage("pagerank")
+
+    # Stage 6: Embeddings (optional) — dual-model streaming
     _start_stage("embed")
-    all_embeddings: dict = {}  # only kept for edge weight computation
     detected_lang = lang if lang != "auto" else "multilingual"
     effective_text_model = "intfloat/multilingual-e5-small"
     if embed:
@@ -344,6 +337,7 @@ def run_pipeline(
             from codeloom.query.embeddings import (
                 CODE_MODEL,
                 TEXT_MODEL,
+                clear_model_cache,
                 embed_nodes_streaming,
             )
 
@@ -354,16 +348,22 @@ def run_pipeline(
                 f"Dual-model: code={CODE_MODEL}, text={effective_text_model}",
             )
 
-            # Incremental embedding: skip nodes that already have embeddings
             skip_ids: set[str] | None = None
             if incremental:
                 existing_ids = store.get_embedded_node_ids()
-                # Nodes from re-extracted files should NOT be skipped
-                nodes_from_changed = {
-                    n
-                    for n, d in result.graph.nodes(data=True)
-                    if d.get("file_path", "") in re_extracted_files
-                }
+                if hasattr(result.graph, 'vs'):
+                    nodes_from_changed = {
+                        v["name"]
+                        for v in result.graph.vs
+                        if v.attributes().get("file_path", "")
+                        in re_extracted_files
+                    }
+                else:
+                    nodes_from_changed = {
+                        n
+                        for n, d in result.graph.nodes(data=True)
+                        if d.get("file_path", "") in re_extracted_files
+                    }
                 skip_ids = existing_ids - nodes_from_changed
                 if skip_ids:
                     _progress(
@@ -372,7 +372,6 @@ def run_pipeline(
                         " existing embeddings",
                     )
 
-            # Free incremental tracking sets — no longer needed
             del re_extracted_files
             if skip_ids is not None:
                 del existing_ids, nodes_from_changed
@@ -390,12 +389,9 @@ def run_pipeline(
                     CODE_MODEL if model_type == "code" else effective_text_model
                 )
                 store.save_embeddings(
-                    batch_dict,
-                    model_name=model_label,
-                    model_type=model_type,
+                    batch_dict, model_name=model_label, model_type=model_type,
                 )
-                all_embeddings.update(batch_dict)
-                del batch_dict  # free batch immediately after use
+                del batch_dict
                 total_count += len(batch_ids)
                 if model_type == "code":
                     code_count += len(batch_ids)
@@ -414,9 +410,12 @@ def run_pipeline(
                 f" (code:{code_count} text:{text_count})",
             )
 
+            # Free SentenceTransformer models — they hold ~600 MB and are
+            # no longer needed after streaming completes
+            clear_model_cache()
+
             _progress("embed", "Computing edge weights")
-            compute_edge_weights(result.graph, embeddings=all_embeddings)
-            del all_embeddings
+            compute_edge_weights(result.graph, store=store)
         except ImportError:
             _progress(
                 "embed",
@@ -430,12 +429,11 @@ def run_pipeline(
         compute_edge_weights(result.graph)
     _end_stage("embed")
 
-    # Stage 6: Cluster
+    # Stage 7: Cluster
     _start_stage("cluster")
     _progress("cluster", "Running hierarchical community detection")
     result.cluster_result = hierarchical_cluster(
-        result.graph,
-        resolutions=resolutions,
+        result.graph, resolutions=resolutions,
     )
     _progress(
         "cluster",
@@ -443,33 +441,44 @@ def run_pipeline(
     )
 
     # Annotate graph nodes with community IDs
-    for node_id, comm_ids in result.cluster_result.node_to_community.items():
-        if result.graph.has_node(node_id):
-            result.graph.nodes[node_id]["community_ids"] = comm_ids
+    if hasattr(result.graph, 'vs'):
+        name_to_v = {v["name"]: v for v in result.graph.vs}
+        for node_id, comm_ids in (
+            result.cluster_result.node_to_community.items()
+        ):
+            v = name_to_v.get(node_id)
+            if v is not None:
+                v["community_ids"] = comm_ids
+    else:
+        for node_id, comm_ids in (
+            result.cluster_result.node_to_community.items()
+        ):
+            if result.graph.has_node(node_id):
+                result.graph.nodes[node_id]["community_ids"] = comm_ids
 
-    # Generate community summaries for search indexing
     from codeloom.core.cluster import summarize_communities
 
     summarize_communities(result.graph, result.cluster_result)
     _end_stage("cluster")
     _progress("cluster", "Community summaries generated")
 
-    # Stage 7: Analyze
+    # Stage 8: Analyze
     _start_stage("analyze")
     _progress("analyze", "Running structural analysis")
     result.analysis = analyze(result.graph, pagerank=result.pagerank)
     _end_stage("analyze")
     _progress("analyze", f"Found {len(result.analysis.god_nodes)} god nodes")
 
-    # Stage 8: Persist
+    # Stage 9: Persist
     _start_stage("store")
     _progress("store", "Saving to database")
     store.save_graph(result.graph)
-    # Free source_snippet from in-memory graph nodes — it is persisted
-    # in SQLite for FTS5 and wastes ~2KB per node in RAM. Any future
-    # load_graph() from SQLite will restore it.
-    for _, data in result.graph.nodes(data=True):
-        data.pop("source_snippet", None)
+    if hasattr(result.graph, 'vs'):
+        for v in result.graph.vs:
+            v.attributes().pop("source_snippet", None)
+    else:
+        for _, data in result.graph.nodes(data=True):
+            data.pop("source_snippet", None)
     store.save_communities(result.cluster_result.communities)
     store.set_meta("source_dir", str(source_dir))
     store.set_meta("model_name", model_name or "dual:bge-small+e5-small")
@@ -477,16 +486,12 @@ def run_pipeline(
     store.set_meta("text_model", effective_text_model)
     store.set_meta("status", "complete")
 
-    # Save file hashes for incremental builds
     if new_hashes:
-        # Merge with previous hashes (keep unchanged files)
         all_hashes = {**prev_hashes, **new_hashes}
-        # Remove deleted files from hashes
         for df in deleted_files:
             all_hashes.pop(df, None)
         store.set_meta("file_hashes", json.dumps(all_hashes))
 
-    # Build vector index
     if result.embeddings_count > 0:
         try:
             store.build_vector_index()
@@ -494,16 +499,13 @@ def run_pipeline(
         except Exception:
             logger.debug("Vector index build failed", exc_info=True)
 
-    # Clear search and query embedding caches after rebuild (stale results)
     try:
         from codeloom.query.hybrid import clear_search_cache
-
         clear_search_cache()
     except ImportError:
         pass
     try:
         from codeloom.query.embeddings import clear_query_cache
-
         clear_query_cache()
     except ImportError:
         pass
@@ -511,8 +513,96 @@ def run_pipeline(
     store.close()
     _end_stage("store")
 
+    # Convert igraph back to NetworkX for backward compatibility with
+    # code that expects result.graph to be an nx.DiGraph. This causes
+    # a brief memory spike (~2GB for 224k nodes) but the pipeline is
+    # complete at this point — the caller is about to consume the result.
+    _igraph_to_nx(result)
+
     total = sum(result.stage_timings.values())
     result.stage_timings["total"] = total
     _progress("done", f"Code graph saved to {db_path} ({total:.1f}s total)")
 
     return result
+
+
+def _nx_to_igraph(result: PipelineResult) -> None:
+    """Convert result.graph from NetworkX to igraph, freeing the nx graph.
+
+    Each node attribute (label, kind, file_path, ...) becomes a separate
+    C-backed igraph vertex attribute — ~10x less memory than Python dicts.
+    """
+    G_nx = result.graph
+    if G_nx is None or G_nx.number_of_nodes() == 0:
+        return
+
+    import igraph as ig
+
+    node_list = list(G_nx.nodes())
+    node_index = {n: i for i, n in enumerate(node_list)}
+    node_attrs = set()
+    for _, data in G_nx.nodes(data=True):
+        node_attrs.update(data.keys())
+
+    ig_graph = ig.Graph(directed=True)
+    ig_graph.add_vertices(len(node_list))
+    ig_graph.vs["name"] = node_list
+
+    for attr in sorted(node_attrs):
+        values = []
+        for n in node_list:
+            val = G_nx.nodes[n].get(attr)
+            if attr == "community_ids" and isinstance(val, list):
+                values.append(val)
+            elif attr == "metadata" and isinstance(val, dict):
+                values.append(val)
+            elif val is not None:
+                values.append(val)
+            else:
+                values.append("" if attr != "pagerank" else 0.0)
+        ig_graph.vs[attr] = values
+
+    edge_list = []
+    edge_attrs: dict[str, list] = {}
+    for u, v, data in G_nx.edges(data=True):
+        edge_list.append((node_index[u], node_index[v]))
+        for k, val in data.items():
+            if k not in edge_attrs:
+                edge_attrs[k] = [None] * G_nx.number_of_edges()
+            edge_attrs[k][len(edge_list) - 1] = val
+
+    ig_graph.add_edges(edge_list)
+    for attr, values in edge_attrs.items():
+        try:
+            ig_graph.es[attr] = values
+        except Exception:
+            pass
+
+    del G_nx
+    gc.collect()
+    result.graph = ig_graph  # type: ignore[assignment]
+
+
+def _igraph_to_nx(result: PipelineResult) -> None:
+    """Convert result.graph from igraph back to NetworkX.
+
+    Called after the database has been written so the returned
+    PipelineResult remains backward-compatible.
+    """
+    G_ig = result.graph
+    if G_ig is None or not hasattr(G_ig, 'vs'):
+        return
+
+    G_nx = nx.DiGraph()
+    for v in G_ig.vs:
+        attrs = dict(v.attributes())
+        node_id = attrs.pop("name", str(v.index))
+        G_nx.add_node(node_id, **attrs)
+
+    names = G_ig.vs["name"]
+    for e in G_ig.es:
+        G_nx.add_edge(
+            names[e.source], names[e.target], **dict(e.attributes())
+        )
+
+    result.graph = G_nx

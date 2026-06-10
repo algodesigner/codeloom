@@ -9,9 +9,13 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
+
+if TYPE_CHECKING:
+    import igraph
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +208,13 @@ class KnowledgeStore:
     # --- Graph persistence ---
 
     def save_graph(self, G: nx.DiGraph) -> None:
+        """Persist a graph to SQLite. Accepts NetworkX or igraph."""
+        if hasattr(G, 'vs'):
+            self._save_igraph(G)
+        else:
+            self._save_nx_graph(G)
+
+    def _save_nx_graph(self, G: nx.DiGraph) -> None:
         """Persist a NetworkX graph to SQLite."""
         c = self.conn.cursor()
         c.execute("DELETE FROM nodes")
@@ -253,8 +264,6 @@ class KnowledgeStore:
             )
 
         for u, v, data in G.edges(data=True):
-            # Store extra edge attributes as JSON
-            # (co_change_count, sample_messages, etc.)
             extra = {
                 k: v
                 for k, v in data.items()
@@ -274,7 +283,6 @@ class KnowledgeStore:
                 ),
             )
 
-        # Populate community_members mapping table
         c.execute("DELETE FROM community_members")
         for node_id, data in G.nodes(data=True):
             for comm_id in data.get("community_ids", []):
@@ -284,9 +292,86 @@ class KnowledgeStore:
                     (comm_id, node_id),
                 )
 
-        # Populate FTS5 index
         self._rebuild_fts(c, G)
+        self.conn.commit()
 
+    def _save_igraph(self, G: "igraph.Graph") -> None:
+        """Persist an igraph graph to SQLite."""
+        c = self.conn.cursor()
+        c.execute("DELETE FROM nodes")
+        c.execute("DELETE FROM edges")
+
+        for v in G.vs:
+            attrs = v.attributes()
+            node_id = v["name"]
+            community_ids = attrs.get("community_ids", [])
+            meta_keys = {
+                "label", "kind", "file_path", "language",
+                "start_line", "end_line", "docstring", "signature",
+                "source_snippet", "pagerank", "community_ids", "name",
+            }
+            meta = {k: v for k, v in attrs.items() if k not in meta_keys}
+            c.execute(
+                """INSERT OR REPLACE INTO nodes
+                   (id, label, kind, file_path, language, start_line, end_line,
+                    docstring, signature, source_snippet, pagerank,
+                    community_ids, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    node_id,
+                    attrs.get("label", ""),
+                    attrs.get("kind", ""),
+                    attrs.get("file_path", ""),
+                    attrs.get("language", ""),
+                    attrs.get("start_line", 0),
+                    attrs.get("end_line", 0),
+                    attrs.get("docstring", ""),
+                    attrs.get("signature", ""),
+                    attrs.get("source_snippet", ""),
+                    attrs.get("pagerank", 0.0),
+                    json.dumps(
+                        community_ids
+                        if isinstance(community_ids, list)
+                        else []
+                    ),
+                    json.dumps(meta),
+                ),
+            )
+
+        names = G.vs["name"]
+        for e in G.es:
+            attrs = e.attributes()
+            src_name = names[e.source]
+            tgt_name = names[e.target]
+            extra = {
+                k: v for k, v in attrs.items()
+                if k not in ("relation", "confidence", "weight")
+            }
+            c.execute(
+                """INSERT OR REPLACE INTO edges
+                   (source, target, relation, confidence, weight, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    src_name,
+                    tgt_name,
+                    attrs.get("relation", ""),
+                    attrs.get("confidence", "EXTRACTED"),
+                    attrs.get("weight", 1.0),
+                    json.dumps(extra),
+                ),
+            )
+
+        c.execute("DELETE FROM community_members")
+        for v in G.vs:
+            node_id = v["name"]
+            for comm_id in (v.attributes().get("community_ids", []) or []):
+                c.execute(
+                    "INSERT OR IGNORE INTO community_members "
+                    "(community_id, node_id) VALUES (?, ?)",
+                    (comm_id, node_id),
+                )
+
+        self._rebuild_fts_from_igraph(c, G)
         self.conn.commit()
 
     def load_graph(self) -> nx.DiGraph:
@@ -479,6 +564,9 @@ class KnowledgeStore:
         """
         import faiss
 
+        # Single-thread FAISS to avoid libomp segfault on macOS ARM64
+        # (LLVM OpenMP __kmp_suspend_initialize_thread race condition)
+        faiss.omp_set_num_threads(1)
         if embeddings is not None:
             # Legacy single-index path (for backward compat)
             if not embeddings:
@@ -552,6 +640,8 @@ class KnowledgeStore:
         """
         import faiss
 
+        # Single-thread FAISS to avoid libomp segfault on macOS ARM64
+        faiss.omp_set_num_threads(1)
         if not self._faiss_indices:
             self.build_vector_index()
 
@@ -684,6 +774,31 @@ class KnowledgeStore:
                         data.get("file_path", ""),
                         data.get("docstring", ""),
                         data.get("signature", ""),
+                    ),
+                )
+        except Exception:
+            logger.debug(
+                "FTS5 not available, skipping index rebuild",
+                exc_info=True,
+            )
+
+    def _rebuild_fts_from_igraph(self, cursor, G: "igraph.Graph") -> None:
+        """Build FTS5 index from an igraph graph."""
+        try:
+            cursor.execute("DELETE FROM nodes_fts")
+            for v in G.vs:
+                attrs = v.attributes()
+                cursor.execute(
+                    """INSERT INTO nodes_fts
+                       (node_id, label, kind, file_path, docstring, signature)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        v["name"],
+                        attrs.get("label", ""),
+                        attrs.get("kind", ""),
+                        attrs.get("file_path", ""),
+                        attrs.get("docstring", ""),
+                        attrs.get("signature", ""),
                     ),
                 )
         except Exception:
