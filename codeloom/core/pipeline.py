@@ -475,7 +475,8 @@ def run_pipeline(
     store.save_graph(result.graph)
     if hasattr(result.graph, 'vs'):
         for v in result.graph.vs:
-            v.attributes().pop("source_snippet", None)
+            if "source_snippet" in v.attribute_names():
+                del v["source_snippet"]
     else:
         for _, data in result.graph.nodes(data=True):
             data.pop("source_snippet", None)

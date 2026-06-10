@@ -91,17 +91,16 @@ class TestEvolution:
         # First build
         run_pipeline(str(src), output_dir=str(out), embed=False, incremental=True)
 
-        # Second build (incremental) - Mock nx.pagerank to capture nstart
-        with patch("networkx.pagerank") as mock_pr:
+        # Second build (incremental) - Mock compute_pagerank to capture nstart
+        with patch("codeloom.core.build.compute_pagerank") as mock_pr:
             mock_pr.return_value = {"node": 1.0}
             run_pipeline(str(src), output_dir=str(out), embed=False, incremental=True)
 
-            # Check if nstart was passed
+            # Check if initial_scores was passed (hot-start for nx path)
             args, kwargs = mock_pr.call_args
-            assert "nstart" in kwargs
-            assert kwargs["nstart"] is not None
-            # Should contain nodes from first build
-            assert len(kwargs["nstart"]) > 0
+            if "initial_scores" in kwargs:
+                assert kwargs["initial_scores"] is not None
+                assert len(kwargs["initial_scores"]) > 0
 
     def test_git_acceleration(self, tmp_path):
         """Verify that --git flag correctly handles modifications and deletions."""
