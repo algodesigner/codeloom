@@ -642,7 +642,7 @@ def extract_search_terms(query: str) -> list[str]:
 def _build_seed_subtree(
     G: nx.DiGraph,
     seed_ids: list[str],
-    max_path_length: int = 6,
+    max_path_length: int = 4,
 ) -> tuple[list[str], list[SearchEdge], list[str]]:
     """Build MST-based minimum subtree connecting all seeds.
 
