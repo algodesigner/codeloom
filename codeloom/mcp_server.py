@@ -31,7 +31,7 @@ import threading
 import traceback
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from codeloom.cli._helpers import suppress_library_logs
 
@@ -68,7 +68,7 @@ def _safe_tool(func):
 
     return wrapper
 
-mcp = FastMCP(
+mcp = MCPServer(
     "codeloom",
     instructions=(
         "You are an expert software engineer with access to a high-fidelity "

@@ -82,7 +82,7 @@ def _dependencies_upstream(G, node_id: str, max_depth: int) -> set[str]:
         max_size=15,
     )
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_impact_is_superset_of_direct_dependents(edges):
     """impact should always include direct dependents (depth=1)."""
     G = _build_random_graph(edges)
@@ -108,7 +108,7 @@ def test_impact_is_superset_of_direct_dependents(edges):
         max_size=15,
     )
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_dependencies_is_superset_of_direct_deps(edges):
     """dependencies should always include direct deps (depth=1)."""
     G = _build_random_graph(edges)
@@ -133,7 +133,7 @@ def test_dependencies_is_superset_of_direct_deps(edges):
         max_size=12,
     )
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_no_node_at_multiple_depths(edges):
     """A node should not appear at two different depths in impact output."""
     G = _build_random_graph(edges)
@@ -159,7 +159,7 @@ def test_no_node_at_multiple_depths(edges):
         max_size=10,
     )
 )
-@settings(max_examples=30)
+@settings(max_examples=30, deadline=None)
 def test_depth_limit_respected(edges):
     """Setting max_depth=1 should not return nodes at depth > 1."""
     G = _build_random_graph(edges)

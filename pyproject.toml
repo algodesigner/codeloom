@@ -78,7 +78,7 @@ dependencies = [
     "faiss-cpu>=1.7.4",
     "leidenalg>=0.10",
     "igraph>=0.11",
-    "mcp>=1.0",
+    "mcp>=2,<3",
     "numpy>=1.26",
     "pathspec>=0.12",
     "pyyaml>=6.0",
@@ -92,7 +92,7 @@ Repository = "https://github.com/algodesigner/codeloom"
 Issues = "https://github.com/algodesigner/codeloom/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=1.0", "hypothesis>=6.0"]
+dev = ["pytest>=8.0", "pytest-cov", "ruff", "mcp>=2,<3", "hypothesis>=6.0"]
 docs = ["pymupdf>=1.24"]
 djvu = ["djvulibre-python>=0.9"]
 
