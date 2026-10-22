@@ -558,7 +558,9 @@ Agents are instructed to **always search before grepping** — one search call c
 
 ### Supported formats
 
-**Code (17+ languages)**: Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, Ruby, PHP, Swift, Kotlin, C#, Objective-C, Scala, Shell, Lua, R, Elixir, Terraform/HCL
+**Code (19+ languages)**: Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, Ruby, PHP, Swift, Kotlin, C#, Objective-C, Scala, Shell, Lua, R, Elixir, Terraform/HCL, MQL4, MQL5
+
+MQL4/MQL5 (`.mq4`, `.mq5`, `.mqh`) have no dedicated tree-sitter grammar, so they are parsed with the C++ grammar — the same approach GitHub Linguist takes (both dialects map to `c_cpp`).
 
 **Document**: Markdown, YAML, JSON, TOML, PDF, HTML, CSV/TSV
 

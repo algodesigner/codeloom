@@ -120,6 +120,9 @@ class TestNameToLang:
             (".S", "assembly"),
             (".gen", "assembly"),
             (".z80", "assembly"),
+            (".mq4", "mql4"),
+            (".mq5", "mql5"),
+            (".mqh", "mql5"),
         ]
         for ext, expected in cases:
             p = tmp_path / f"test{ext}"

@@ -42,6 +42,9 @@ GRAMMAR_CHECKS: list[tuple[str, str, str, str]] = [
      "package Hello is\n  procedure Greet;\nend Hello;\n", "Hello"),
     ("rst", ".rst", "Title\n=====\n\nSome text.\n", "Title"),
     ("org", ".org", "* Heading\nSome text.\n", "Heading"),
+    # MQL4/MQL5 — no dedicated grammar, parsed via the C++ grammar
+    ("mql5", ".mq5", "void OnTick()\n{\n}\n", "OnTick"),
+    ("mql4", ".mq4", "int OnInit()\n{\n    return 0;\n}\n", "OnInit"),
 ]
 
 

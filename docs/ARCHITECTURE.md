@@ -20,7 +20,7 @@ Source Directory
        │
        ▼
 ┌──────────────────┐
-│    Extraction    │  ◄── tree-sitter AST parsers (17+ languages)
+│    Extraction    │  ◄── tree-sitter AST parsers (19+ languages)
 │                  │       Regex fallback, document parsers
 │  nodes + edges   │       SHA-256 hashing per file
 └────────┬─────────┘
@@ -68,7 +68,7 @@ Source Directory
 
 For every file in the source directory (respecting `.gitignore`, `.codeloom-ignore`, and built-in ignores), codeloom applies the appropriate extractor:
 
-### Structural Extraction (17+ languages)
+### Structural Extraction (19+ languages)
 
 Uses **tree-sitter** AST parsers for deep structural extraction. Each parser walks the concrete syntax tree and produces typed nodes.
 
@@ -82,6 +82,7 @@ Uses **tree-sitter** AST parsers for deep structural extraction. Each parser wal
 | Java | `tree_sitter_java` |
 | C | `tree_sitter_c` |
 | C++ | `tree_sitter_cpp` |
+| MQL4 / MQL5 | `tree_sitter_cpp` |
 | C# | `tree_sitter_c_sharp` |
 | Ruby | `tree_sitter_ruby` |
 | Swift | `tree_sitter_swift` |

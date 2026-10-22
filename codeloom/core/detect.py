@@ -30,6 +30,8 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "kotlin": [".kt", ".kts"],
     "c_sharp": [".cs"],
     "objc": [".m", ".mm"],
+    "mql4": [".mq4"],
+    "mql5": [".mq5", ".mqh"],
     "scala": [".scala"],
     "shell": [".sh", ".bash", ".zsh"],
     "lua": [".lua"],

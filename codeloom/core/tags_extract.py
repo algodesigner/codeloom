@@ -58,6 +58,8 @@ _LANG_TO_PACKAGE: dict[str, str] = {
     "cpp": "cpp",
     "c_sharp": "c_sharp",
     "csharp": "c_sharp",
+    "mql4": "cpp",
+    "mql5": "cpp",
     "shell": "bash",
     "typescript": "typescript",
     "php": "php",
@@ -73,6 +75,22 @@ _LANG_FUNC_NAME: dict[str, str] = {
     "ocaml": "language_ocaml",
     "xml": "language_xml",
 }
+
+
+def _supplementary_query(
+    queries: dict[str, str], language: str
+) -> str | None:
+    """Look up a supplementary query, falling back to the grammar package.
+
+    Languages without a dedicated grammar reuse the queries of the package
+    they map to (e.g. mql4/mql5 -> cpp).
+    """
+    query = queries.get(language)
+    if query is None:
+        pkg = _LANG_TO_PACKAGE.get(language, language)
+        query = queries.get(pkg)
+    return query
+
 
 # ---------------------------------------------------------------------------
 # Supplementary queries: imports & inheritance per language
@@ -799,7 +817,7 @@ def _extract_imports(
     result: ExtractionResult,
 ) -> None:
     """Extract import edges using per-language supplementary queries."""
-    query_str = _IMPORT_QUERIES.get(language)
+    query_str = _supplementary_query(_IMPORT_QUERIES, language)
     if not query_str:
         return
     query = _make_query(lang_obj, query_str)
@@ -831,7 +849,7 @@ def _extract_inheritance(
     result: ExtractionResult,
 ) -> None:
     """Extract inheritance edges using per-language supplementary queries."""
-    query_str = _INHERITANCE_QUERIES.get(language)
+    query_str = _supplementary_query(_INHERITANCE_QUERIES, language)
     if not query_str:
         return
     query = _make_query(lang_obj, query_str)

@@ -9,7 +9,7 @@ metadata:
 
 # codeloom
 
-Builds code graphs from source code and documents. Searches with 5-signal hybrid search (code vector + text vector + graph traversal + FTS5 keyword + community → RRF fusion). Supports 17 languages with deep AST extraction. 100% local.
+Builds code graphs from source code and documents. Searches with 5-signal hybrid search (code vector + text vector + graph traversal + FTS5 keyword + community → RRF fusion). Supports 19 languages with deep AST extraction. 100% local.
 
 **IMPORTANT: Always use `--json` flag when running via CLI.**
 
