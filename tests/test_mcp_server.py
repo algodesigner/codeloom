@@ -570,6 +570,21 @@ class TestBuildTool:
             _, kwargs = mock_pipe.call_args
             assert kwargs.get("incremental") is False
 
+    def test_build_rejects_concurrent_build(self, tmp_path):
+        from codeloom import mcp_server
+
+        src = tmp_path / "proj"
+        src.mkdir()
+        (src / "hello.py").write_text("def hello(): pass\n")
+
+        assert mcp_server._build_lock.acquire(blocking=False)
+        try:
+            result = mcp_server.build(str(src))
+        finally:
+            mcp_server._build_lock.release()
+
+        assert "Build Already Running" in result
+
 
 # ---------------------------------------------------------------------------
 # Tests: search_keyword tool

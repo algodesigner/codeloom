@@ -31,7 +31,7 @@ import threading
 import traceback
 from pathlib import Path
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from codeloom.cli._helpers import suppress_library_logs
 
@@ -102,6 +102,7 @@ _store = None
 _graph = None
 _db_path: str | None = None
 _reload_lock = threading.Lock()
+_build_lock = threading.Lock()
 
 
 def _get_db_path(source_dir: str | None = None) -> str:
@@ -1214,6 +1215,7 @@ def build(
     directory: str = ".",
     incremental: bool = True,
     max_workers: int | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """Build or rebuild the code graph from source code.
 
@@ -1221,9 +1223,9 @@ def build(
         directory: Directory to analyze (default: current directory).
         incremental: If true, only re-process changed files (default: true).
         max_workers: Number of parallel extraction workers
-            (default: os.cpu_count()).
+            (default: min(os.cpu_count(), 8)).
     """
-    from codeloom.core.pipeline import run_pipeline
+    from codeloom.core.pipeline import PIPELINE_STAGES, run_pipeline
     from codeloom.storage.store import KnowledgeStore
 
     target = Path(directory).resolve()
@@ -1253,38 +1255,79 @@ def build(
         except Exception:
             pass
 
-    result = run_pipeline(
-        str(target), incremental=incremental, max_workers=max_workers
-    )
+    if not _build_lock.acquire(blocking=False):
+        return (
+            "## Build Already Running\n\n"
+            "Another build is already in progress. Wait for it to finish "
+            "before starting another."
+        )
 
-    nodes = getattr(result, "node_count", 0) or (
-        result.graph.number_of_nodes()
-        if getattr(result, "graph", None)
-        else 0
-    )
-    edges = getattr(result, "edge_count", 0) or (
-        result.graph.number_of_edges()
-        if getattr(result, "graph", None)
-        else 0
-    )
-    dr = getattr(result, "detect_result", None)
-    files = len(dr.files) if dr else 0
+    try:
+        import time
 
-    if hasattr(result, "release_memory"):
-        result.release_memory()
+        progress = {"count": 0, "stage": "", "last": 0.0}
 
-    _reload()
+        def on_progress(stage: str, detail: str = "") -> None:
+            if ctx is None:
+                return
+            progress["count"] += 1
+            now = time.monotonic()
+            if stage == progress["stage"] and now - progress["last"] < 1.0:
+                return
+            progress["stage"] = stage
+            progress["last"] = now
+            if stage in PIPELINE_STAGES:
+                value = float(PIPELINE_STAGES.index(stage) + 1)
+                total: float | None = float(len(PIPELINE_STAGES))
+            else:
+                value = float(progress["count"])
+                total = None
+            try:
+                import anyio
 
-    db_info = _get_db_path(source_dir=str(target))
-    return (
-        f"## Build Complete\n\n"
-        f"- **Directory**: {target}\n"
-        f"- **Mode**: {'incremental' if incremental else 'full'}\n"
-        f"- **Nodes**: {nodes}\n"
-        f"- **Edges**: {edges}\n"
-        f"- **Files detected**: {files}\n"
-        f"- **Database**: {db_info}\n"
-    )
+                anyio.from_thread.run(
+                    ctx.report_progress, value, total, f"{stage}: {detail}"
+                )
+            except Exception:
+                pass
+
+        result = run_pipeline(
+            str(target),
+            incremental=incremental,
+            max_workers=max_workers,
+            on_progress=on_progress,
+        )
+
+        nodes = getattr(result, "node_count", 0) or (
+            result.graph.number_of_nodes()
+            if getattr(result, "graph", None)
+            else 0
+        )
+        edges = getattr(result, "edge_count", 0) or (
+            result.graph.number_of_edges()
+            if getattr(result, "graph", None)
+            else 0
+        )
+        dr = getattr(result, "detect_result", None)
+        files = len(dr.files) if dr else 0
+
+        if hasattr(result, "release_memory"):
+            result.release_memory()
+
+        _reload()
+
+        db_info = _get_db_path(source_dir=str(target))
+        return (
+            f"## Build Complete\n\n"
+            f"- **Directory**: {target}\n"
+            f"- **Mode**: {'incremental' if incremental else 'full'}\n"
+            f"- **Nodes**: {nodes}\n"
+            f"- **Edges**: {edges}\n"
+            f"- **Files detected**: {files}\n"
+            f"- **Database**: {db_info}\n"
+        )
+    finally:
+        _build_lock.release()
 
 
 class _WatchRebuildHandler:
@@ -1319,6 +1362,9 @@ class _WatchRebuildHandler:
         if now - self.last_rebuild < self.cooldown:
             return
         self.last_rebuild = now
+        if not _build_lock.acquire(blocking=False):
+            logger.info("Watch: build already in progress, skipping")
+            return
         logger.info(
             "Watch: change detected in %s — rebuilding...",
             Path(event.src_path).name,
@@ -1335,6 +1381,8 @@ class _WatchRebuildHandler:
             logger.info("Watch: rebuild complete")
         except Exception as e:
             logger.error("Watch: rebuild failed: %s", e)
+        finally:
+            _build_lock.release()
 
 
 @mcp.tool()

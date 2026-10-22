@@ -480,7 +480,7 @@ Each `install` does:
 codeloom mcp
 ```
 
-Starts a **Model Context Protocol** server over stdio, exposing 5 tools:
+Starts a **Model Context Protocol** server over stdio, exposing 16 tools:
 
 | Tool | Description |
 |------|-------------|
@@ -495,13 +495,21 @@ Configure in your agent's MCP settings:
 ```json
 {
   "mcp": {
-    "codeloom": {
-      "type": "local",
-      "command": ["codeloom", "mcp"]
+    "servers": {
+      "codeloom": {
+        "type": "local",
+        "command": ["codeloom", "mcp"]
+      }
     }
   }
 }
 ```
+
+`build` runs at most one build at a time within the MCP server and
+accepts `max_workers` (default: `min(os.cpu_count(), 8)`) to bound the
+number of extraction processes; a separate `codeloom build` CLI process
+is not coordinated with it. `watch` needs the optional `watchdog`
+dependency (`pip install "codeloom[watch]"`).
 
 ### How agents should use codeloom
 

@@ -9,6 +9,7 @@ import gc
 import hashlib
 import json
 import logging
+import multiprocessing
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -28,6 +29,30 @@ from codeloom.core.extract import ExtractionResult
 from codeloom.storage.store import KnowledgeStore
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_MAX_WORKERS = 8
+
+# Ordered pipeline stages, used for coarse progress reporting.
+PIPELINE_STAGES = (
+    "detect",
+    "extract",
+    "build",
+    "git_cochange",
+    "resolve",
+    "pagerank",
+    "embed",
+    "cluster",
+    "analyze",
+    "store",
+    "done",
+)
+
+
+def _resolve_worker_count(max_workers: int | None) -> int:
+    """Resolve the extraction worker count, capped to a sane default."""
+    if max_workers is not None:
+        return max_workers
+    return min(max(1, os.cpu_count() or 1), _DEFAULT_MAX_WORKERS)
 
 
 @dataclass
@@ -191,15 +216,18 @@ def run_pipeline(
 
     # Phase 2 (parallel): extract changed files
     if to_extract:
-        n_workers = max_workers if max_workers is not None else max(
-            1, os.cpu_count() or 1
-        )
+        n_workers = _resolve_worker_count(max_workers)
         _progress(
             "extract",
             f"Extracting {len(to_extract)} files "
             f"({n_workers} workers)"
         )
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        # spawn avoids forking a process that already holds threads
+        # (torch/OpenMP, watchdog), which can deadlock the workers
+        with ProcessPoolExecutor(
+            max_workers=n_workers,
+            mp_context=multiprocessing.get_context("spawn"),
+        ) as executor:
             fut_map = {
                 executor.submit(extract_file, fpath, lang): (fpath, lang)
                 for fpath, lang in to_extract

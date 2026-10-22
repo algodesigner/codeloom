@@ -248,3 +248,59 @@ class TestPipelineNoEmbed:
         files = {f.path.name for f in result.detect_result.files}
         assert "small.py" in files
         assert "big.py" not in files
+
+
+def test_extract_pool_uses_spawn_context(tmp_path, monkeypatch):
+    """The extract pool must not fork — the server already has threads."""
+    import codeloom.core.pipeline as pipeline
+
+    captured: dict = {}
+    real_executor = pipeline.ProcessPoolExecutor
+
+    class RecordingExecutor(real_executor):
+        def __init__(self, *args, **kwargs):
+            captured.update(kwargs)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "ProcessPoolExecutor", RecordingExecutor)
+
+    src = _create_mini_project(tmp_path)
+    run_pipeline(src, output_dir=tmp_path / "out", embed=False)
+
+    assert "mp_context" in captured
+    assert captured["mp_context"].get_start_method() == "spawn"
+
+
+def test_resolve_worker_count_is_capped(monkeypatch):
+    """The default worker count is capped so huge machines don't spawn 64."""
+    import codeloom.core.pipeline as pipeline
+
+    monkeypatch.setattr(pipeline.os, "cpu_count", lambda: 64)
+    assert pipeline._resolve_worker_count(None) == 8
+
+
+def test_resolve_worker_count_respects_override():
+    import codeloom.core.pipeline as pipeline
+
+    assert pipeline._resolve_worker_count(3) == 3
+
+
+def test_progress_stages_are_listed(tmp_path):
+    """Every emitted stage is listed in PIPELINE_STAGES (drift guard)."""
+    import codeloom.core.pipeline as pipeline
+
+    src = _create_mini_project(tmp_path)
+    seen = []
+
+    def on_progress(stage, detail=""):
+        seen.append(stage)
+
+    run_pipeline(
+        src,
+        output_dir=tmp_path / "out",
+        embed=False,
+        on_progress=on_progress,
+    )
+
+    assert seen
+    assert set(seen).issubset(set(pipeline.PIPELINE_STAGES))
