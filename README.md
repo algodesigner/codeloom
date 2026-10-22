@@ -148,7 +148,7 @@ One command per platform:
 | **Aider CLI** | `codeloom install aider` |
 | **Any MCP client** | `claude mcp add codeloom -- codeloom mcp` |
 
-Each `install` writes context rules and registers hooks where supported. For OpenCode, it also installs a plugin that **automatically injects graph context before grep/glob calls**, your agent gets results without having to ask. Remove with `codeloom uninstall <agent>`.
+Each `install` writes context rules and registers hooks where supported. For OpenCode, it installs a skill, adds context rules to `AGENTS.md`, and registers the codeloom MCP server. Remove with `codeloom uninstall <agent>`.
 
 ---
 
@@ -159,9 +159,6 @@ Each `install` writes context rules and registers hooks where supported. For Ope
 
 ### Edit With Confidence
 Run `impact` before editing to find every caller. Run `context` for a full symbol overview, community, all relationships, source snippet. Run `detect_changes` after edits to see which nodes are affected.
-
-### Auto-Context (OpenCode)
-The OpenCode plugin hooks into grep/glob calls, runs `codeloom search` with the query, and injects results directly into the agent's session, graph context appears automatically, no explicit invocation needed.
 
 ### Auto-Rebuild
 Stop/SessionEnd hooks detect changed files via `git diff` and trigger an incremental rebuild. Lock files prevent concurrent rebuilds. Zero manual intervention, the graph stays fresh after every session.

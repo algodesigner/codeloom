@@ -258,6 +258,25 @@ def merge_json_config(file_path: Path, new_data: dict, key_path: list[str]):
     file_path.write_text(_json.dumps(data, indent=2) + "\n")
 
 
+def remove_legacy_mcp_entry(file_path: Path, server: str):
+    """Removes a flat mcp.<server> entry left by V1 installs."""
+    if not file_path.exists():
+        return
+
+    try:
+        data = _json.loads(file_path.read_text())
+    except Exception:
+        return
+
+    mcp = data.get("mcp") if isinstance(data, dict) else None
+    if not isinstance(mcp, dict) or server not in mcp:
+        return
+
+    del mcp[server]
+    file_path.write_text(_json.dumps(data, indent=2) + "\n")
+    human_ok(f"Removed legacy mcp.{server} entry from {file_path.name}.")
+
+
 # ─── Claude Code ─────────────────────────────────────────────────────────────
 
 
@@ -800,11 +819,15 @@ def opencode_install(scope: str | None, force: bool = False):
     sync_codeloom_context(agents_md)
 
     if scope == "user":
-        mcp_config_path = Path.home() / ".config" / "opencode" / "config.json"
-        plugin_dir = Path.home() / ".config" / "opencode" / "plugins"
+        mcp_config_path = (
+            Path.home() / ".config" / "opencode" / "opencode.json"
+        )
+        plugin_file = (
+            Path.home() / ".config" / "opencode" / "plugins" / "codeloom.ts"
+        )
     else:
         mcp_config_path = project_root / "opencode.json"
-        plugin_dir = project_root / ".opencode" / "plugins"
+        plugin_file = project_root / ".opencode" / "plugins" / "codeloom.ts"
 
     mcp_codeloom_config = {
         "codeloom": {
@@ -813,31 +836,16 @@ def opencode_install(scope: str | None, force: bool = False):
         }
     }
 
-    merge_json_config(mcp_config_path, mcp_codeloom_config, ["mcp"])
+    merge_json_config(mcp_config_path, mcp_codeloom_config, ["mcp", "servers"])
+    remove_legacy_mcp_entry(mcp_config_path, "codeloom")
 
-    # Install codeloom plugin
-    plugin_source = (
-        Path(__file__).parent.parent / "scripts" / "opencode_plugin.ts"
-    )
-    if plugin_source.exists():
-        plugin_dest = plugin_dir / "codeloom.ts"
-        plugin_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
-        if not plugin_dest.exists() or force:
-            shutil.copy2(plugin_source, plugin_dest)
-            human_ok(f"Plugin installed to {plugin_dest}")
-        else:
-            msg = (
-                f"Plugin at {plugin_dest} already exists."
-                " Use --force to overwrite."
-            )
-            human_skip(msg)
-    else:
-        human_warn(f"Plugin source not found: {plugin_source}")
+    # Remove the V1 OpenCode plugin left behind by earlier installs
+    if plugin_file.exists():
+        plugin_file.unlink()
+        human_ok(f"Removed legacy plugin {plugin_file}")
 
     human_done(
-        "Done! OpenCode will discover the skill, plugin, and MCP tools "
-        "automatically."
+        "Done! OpenCode will discover the skill and MCP tools automatically."
     )
 
 

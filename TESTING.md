@@ -70,10 +70,12 @@ codeloom uninstall opencode --scope user
 ```
 
 - [ ] `--scope project` creates `.opencode/skills/codeloom/SKILL.md`
-- [ ] `--scope project` writes `opencode.json` with MCP config
+- [ ] `--scope project` writes `opencode.json` with MCP config under `mcp.servers`
 - [ ] `--scope user` creates `~/.config/opencode/skills/codeloom/SKILL.md`
-- [ ] `--scope user` writes `~/.config/opencode/config.json` with MCP config
-- [ ] Run install twice — second run says "already exists"
+- [ ] `--scope user` writes `~/.config/opencode/opencode.json` with MCP config
+- [ ] Install migrates a legacy flat `mcp.codeloom` entry to `mcp.servers`
+- [ ] Install removes any legacy `.opencode/plugins/codeloom.ts`
+- [ ] Run install twice — second run reports the skill is already up-to-date
 - [ ] Uninstall removes the skill directory
 - [ ] Uninstall without prior install says "not found"
 

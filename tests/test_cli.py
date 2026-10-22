@@ -795,7 +795,8 @@ class TestOpenCodeIntegration:
             assert skill_file.exists()
             assert "codeloom" in skill_file.read_text()
 
-    def test_opencode_install_user_scope(self, tmp_path):
+    def test_opencode_install_user_scope(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
@@ -814,10 +815,6 @@ class TestOpenCodeIntegration:
             )
             assert skill_file.exists()
             assert "codeloom" in skill_file.read_text()
-            # Clean up
-            import shutil
-
-            shutil.rmtree(home / ".config" / "opencode" / "skills" / "codeloom")
 
     def test_opencode_install_idempotent(self, tmp_path):
         runner = CliRunner()
@@ -871,10 +868,17 @@ class TestOpenCodeIntegration:
             assert config_file.exists()
             config = json.loads(config_file.read_text())
             assert "mcp" in config
-            assert "codeloom" in config["mcp"]
-            assert config["mcp"]["codeloom"]["command"] == ["codeloom", "mcp"]
+            assert "servers" in config["mcp"]
+            assert "codeloom" in config["mcp"]["servers"]
+            assert config["mcp"]["servers"]["codeloom"]["command"] == [
+                "codeloom",
+                "mcp",
+            ]
 
-    def test_opencode_install_writes_mcp_config_user(self, tmp_path):
+    def test_opencode_install_writes_mcp_config_user(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("HOME", str(tmp_path))
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
@@ -882,20 +886,21 @@ class TestOpenCodeIntegration:
                 ["install", "opencode", "--scope", "user"],
             )
             assert result.exit_code == 0
-            config_file = Path.home() / ".config" / "opencode" / "config.json"
+            config_file = (
+                Path.home() / ".config" / "opencode" / "opencode.json"
+            )
             assert config_file.exists()
             config = json.loads(config_file.read_text())
             assert "mcp" in config
-            assert "codeloom" in config["mcp"]
-            # Clean up
-            import shutil
-
-            shutil.rmtree(Path.home() / ".config" / "opencode")
+            assert "servers" in config["mcp"]
+            assert "codeloom" in config["mcp"]["servers"]
 
     def test_opencode_install_merges_existing_mcp_config(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            existing = {"mcp": {"other-tool": {"command": ["other"]}}}
+            existing = {
+                "mcp": {"servers": {"other-tool": {"command": ["other"]}}}
+            }
             Path("opencode.json").write_text(json.dumps(existing))
             result = runner.invoke(
                 cli,
@@ -903,9 +908,45 @@ class TestOpenCodeIntegration:
             )
             assert result.exit_code == 0
             config = json.loads(Path("opencode.json").read_text())
+            assert "other-tool" in config["mcp"]["servers"]
+            assert "codeloom" in config["mcp"]["servers"]
+            assert config["mcp"]["servers"]["codeloom"]["type"] == "local"
+
+    def test_opencode_install_migrates_flat_mcp_config(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            existing = {
+                "mcp": {
+                    "codeloom": {
+                        "type": "local",
+                        "command": ["codeloom", "mcp"],
+                    },
+                    "other-tool": {"command": ["other"]},
+                }
+            }
+            Path("opencode.json").write_text(json.dumps(existing))
+            result = runner.invoke(
+                cli, ["install", "opencode", "--scope", "project"]
+            )
+            assert result.exit_code == 0
+            config = json.loads(Path("opencode.json").read_text())
+            assert "codeloom" not in config["mcp"]
+            assert "codeloom" in config["mcp"]["servers"]
             assert "other-tool" in config["mcp"]
-            assert "codeloom" in config["mcp"]
-            assert config["mcp"]["codeloom"]["type"] == "local"
+
+    def test_opencode_install_removes_legacy_plugin(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            plugin_dir = Path(".opencode/plugins")
+            plugin_dir.mkdir(parents=True)
+            plugin_file = plugin_dir / "codeloom.ts"
+            plugin_file.write_text("// legacy V1 plugin")
+            result = runner.invoke(
+                cli,
+                ["install", "opencode", "--scope", "project"],
+            )
+            assert result.exit_code == 0
+            assert not plugin_file.exists()
 
 
 class TestClaudeIntegration:
